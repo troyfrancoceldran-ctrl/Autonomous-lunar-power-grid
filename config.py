@@ -79,6 +79,31 @@ RFC_SOC_MIN: float = 0.05
 RFC_SOC_MAX: float = 1.00
 
 
+# --- Load profiles -----------------------------------------------------------
+
+# Life support: atmosphere circulation, CO2 scrubbing, water recovery.
+# Runs flat, around the clock, and is never shed.
+ECLSS_POWER_W: float = 6500.0
+
+# Habitat thermal control. The lunar surface swings from about +120 C in
+# daylight to -170 C at night, so the load never goes away — it only changes
+# job, from rejecting heat to adding it.
+THERMAL_DAY_POWER_W: float = 5500.0
+THERMAL_NIGHT_POWER_W: float = 4500.0
+
+# High-gain Earth link: one transmit window per Earth day, standby between.
+COMMS_ACTIVE_POWER_W: float = 2500.0
+COMMS_STANDBY_POWER_W: float = 500.0
+COMMS_WINDOW_HOURS: float = 8.0
+COMMS_PERIOD_HOURS: float = 24.0
+
+# Science campaigns: drills, rovers, instruments. Fully interruptible.
+SCIENCE_ACTIVE_POWER_W: float = 6000.0
+SCIENCE_IDLE_POWER_W: float = 0.0
+SCIENCE_WINDOW_HOURS: float = 12.0
+SCIENCE_PERIOD_HOURS: float = 24.0
+
+
 # --- Load priority tiers -----------------------------------------------------
 
 class LoadPriority(IntEnum):
