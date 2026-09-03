@@ -9,7 +9,7 @@ with Claude giving the spec/pseudocode first and reviewing the result after.
 - [x] Step 1 — `assets/base_asset.py` abstract interfaces (Claude)
 - [x] Step 2 — `environment.py`: LunarEnvironment day/night + solar flux model (user)
 - [x] Step 3 — `assets/generation.py`: PVArray, FissionSurfacePower (user)
-- [ ] Step 4 — `assets/storage.py`: BatteryBank SoC model
+- [x] Step 4 — `assets/storage.py`: BatteryBank SoC model (user, with Claude debugging)
 - [ ] Step 5 — `assets/storage.py`: RegenerativeFuelCell H2/O2 mass model
 - [ ] Step 6 — `assets/loads.py`: ECLSS, ThermalControl, CommsArray, SciencePayload
 - [ ] Step 7 — `controller.py`: AutonomousController (priority shed/restore + hysteresis)
