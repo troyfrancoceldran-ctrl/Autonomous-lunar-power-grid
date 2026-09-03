@@ -20,11 +20,11 @@ day and pushed back through an RFC round-trip of only 0.385.
 
 
 ================================================================================
- API
+API
 ================================================================================
 
 --------------------------------------------------------------------------------
- class PVArray(PowerSource)
+class PVArray(PowerSource)
 --------------------------------------------------------------------------------
 Photovoltaic array; output tracks the environment's irradiance.
 
@@ -33,7 +33,7 @@ Photovoltaic array; output tracks the environment's irradiance.
 @var efficiency      Photon-to-electron conversion efficiency [-].
 @var packing_factor  Cell-to-array area loss, wiring, mismatch, pointing [-].
 
- __init__(name="PV Array", area_m2, efficiency, packing_factor)
+__init__(name="PV Array", area_m2, efficiency, packing_factor)
     Construct a PV array from its nameplate specification.
 
     @param name            Identifier for logs and plots.
@@ -44,7 +44,7 @@ Photovoltaic array; output tracks the environment's irradiance.
     @note The config constants supply DEFAULTS only. Each instance stores its
         own values, so two arrays of different sizes can coexist.
 
- available_power(t_hours, environment) -> float
+available_power(t_hours, environment) -> float
     Electrical power available from the array at time t.
 
     @param  t_hours      Simulation time [h] since t=0.
@@ -63,7 +63,7 @@ Photovoltaic array; output tracks the environment's irradiance.
         irradiance sensor requires no change here.
 
 --------------------------------------------------------------------------------
- class FissionSurfacePower(PowerSource)
+class FissionSurfacePower(PowerSource)
 --------------------------------------------------------------------------------
 Kilopower-class fission reactor; constant output, indifferent to time.
 
@@ -71,16 +71,16 @@ Kilopower-class fission reactor; constant output, indifferent to time.
 @var rated_power_w  Nameplate electrical output [W].
 @var availability   Fraction of time online, in [0, 1].
 
- __init__(name="FSP Reactor", rated_power_w, availability)
+__init__(name="FSP Reactor", rated_power_w, availability)
     Construct a reactor from its nameplate specification.
 
     @param name           Identifier for logs and plots.
     @param rated_power_w  Nameplate electrical output [W].
     @param availability   Online fraction in [0, 1]; 1.0 = never offline.
-                          Values below 1.0 are reserved for future outage
-                          modelling.
+                        Values below 1.0 are reserved for future outage
+                        modelling.
 
- available_power(t_hours, environment) -> float
+available_power(t_hours, environment) -> float
     Electrical power available from the reactor at time t.
 
     @param  t_hours      Simulation time [h]. DELIBERATELY UNUSED.
@@ -94,9 +94,13 @@ Kilopower-class fission reactor; constant output, indifferent to time.
         polymorphic dispatch.
 """
 from assets.base_asset import PowerSource
-from config import (SOLAR_CONSTANT_W_PER_M2, PV_AREA_M2, PV_EFFICIENCY,
-                    PV_PACKING_FACTOR, FSP_AVAILABILITY, FSP_RATED_POWER_W)
-
+from config import (SOLAR_CONSTANT_W_PER_M2
+                    , PV_AREA_M2
+                    , PV_EFFICIENCY
+                    , PV_PACKING_FACTOR
+                    , FSP_AVAILABILITY
+                    , FSP_RATED_POWER_W
+                    )
 
 class PVArray(PowerSource):
     """Photovoltaic array; output tracks the environment's irradiance."""
