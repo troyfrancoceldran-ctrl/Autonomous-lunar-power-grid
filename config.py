@@ -63,6 +63,21 @@ H2_SPECIFIC_ENERGY_MJ_PER_KG: float = 120.0   # lower heating value, ~33.3 kWh/k
 ELECTROLYZER_EFFICIENCY: float = 0.70
 FUEL_CELL_EFFICIENCY: float = 0.55
 
+# Pre-converted so no module has to do MJ -> Wh arithmetic inline.
+H2_SPECIFIC_ENERGY_WH_PER_KG: float = H2_SPECIFIC_ENERGY_MJ_PER_KG * 1e6 / 3600.0
+
+# Stoichiometry of 2 H2 + O2 -> 2 H2O: 4 g of H2 pairs with 32 g of O2.
+O2_TO_H2_MASS_RATIO: float = 8.0
+
+RFC_H2_CAPACITY_KG: float = 120.0           # ~2200 kWh deliverable after fuel-cell losses
+RFC_INITIAL_SOC: float = 1.00               # tanks start full at t=0
+
+RFC_MAX_CHARGE_POWER_W: float = 25_000.0    # electrolyzer rated electrical input
+RFC_MAX_DISCHARGE_POWER_W: float = 12_000.0 # fuel cell rated electrical output
+
+RFC_SOC_MIN: float = 0.05
+RFC_SOC_MAX: float = 1.00
+
 
 # --- Load priority tiers -----------------------------------------------------
 

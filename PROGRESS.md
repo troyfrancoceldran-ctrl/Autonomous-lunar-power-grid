@@ -5,6 +5,14 @@ Claude; physics- and algorithm-heavy steps (environment model, generation,
 storage/SoC math, RFC mass balance, the controller) are written by the user
 with Claude giving the spec/pseudocode first and reviewing the result after.
 
+Documentation convention (applied on completion of every step, from Step 5 on):
+each module carries a Doxygen-style header — `@file` / `@brief` / `@author` /
+`@date` / `@details` — followed by an `API` section holding the full
+`@param` / `@return` / `@note` detail for every class and method. The code
+below carries only a single-phrase docstring per definition, so the
+implementation stays readable without scrolling past its own documentation.
+Authors are Troy Celdran with JARVIS (Claude Opus 5) as co-author.
+
 - [x] Step 0 — Repo scaffold, config constants, `.gitignore`, `requirements.txt` (Claude)
 - [x] Step 1 — `assets/base_asset.py` abstract interfaces (Claude)
 - [x] Step 2 — `environment.py`: LunarEnvironment day/night + solar flux model (user)
