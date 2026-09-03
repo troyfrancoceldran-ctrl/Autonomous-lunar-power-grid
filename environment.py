@@ -15,57 +15,68 @@ PVArray.available_power() can query any t, in any order, without the
 environment having to be "stepped" forward in lockstep with the engine.
 
 @note This class is the seam where the simulation meets reality. On real
-      hardware it is replaced by an irradiance sensor reading; every
-      downstream consumer keeps working unchanged.
+    hardware it is replaced by an irradiance sensor reading; every downstream
+    consumer keeps working unchanged.
+
+
+================================================================================
+ API
+================================================================================
+
+--------------------------------------------------------------------------------
+ class LunarEnvironment
+--------------------------------------------------------------------------------
+Pure model of the lunar day/night cycle.
+
+@var start_phase_hours  Offset [h] placing t=0 somewhere within the cycle.
+
+ __init__(start_phase_hours=0.0)
+    Construct an environment with a chosen starting phase.
+
+    @param start_phase_hours  Where t=0 sits within the 672 h cycle [h].
+                              0.0 starts at lunar dawn; 336.0 starts at
+                              nightfall, which is the stress scenario for
+                              testing storage sizing.
+
+ is_daylight(t_hours) -> bool
+    Whether the outpost is in sunlight at time t.
+
+    @param  t_hours  Simulation time [h] since t=0.
+    @return True during the lunar day, False during the night.
+
+    @note The modulo folds absolute time into one cycle, so this stays correct
+        across the full 56-day run and beyond.
+    @note The comparison is STRICT: phase 336.0 is the first hour of night,
+        not the last hour of day. With a 1 h timestep the simulation lands
+        exactly on that boundary once per cycle, so the operator matters.
+
+ solar_irradiance_fraction(t_hours) -> float
+    Fraction of peak solar flux available at time t.
+
+    @param  t_hours  Simulation time [h] since t=0.
+    @return 1.0 in daylight, 0.0 at night. Always within [0, 1].
+
+    @note Delegates to is_daylight() rather than repeating the modulo, so the
+        two can never disagree about where the terminator falls.
+    @note v1 is a square wave. A sun-angle-based ramp near the terminator is a
+        reasonable v2 refinement; only this method would change.
 """
 from config import LUNAR_CYCLE_HOURS
 from config import LUNAR_DAY_HOURS
 
 
 class LunarEnvironment:
-    """
-    @brief Pure model of the lunar day/night cycle.
-
-    @var start_phase_hours  Offset [h] placing t=0 somewhere in the cycle.
-    """
+    """Pure model of the lunar day/night cycle."""
 
     def __init__(self, start_phase_hours: float = 0.0):
-        """
-        @brief Construct an environment with a chosen starting phase.
-
-        @param start_phase_hours  Where t=0 sits within the 672 h cycle [h].
-                                  0.0 starts at lunar dawn; 336.0 starts at
-                                  nightfall, which is the stress scenario for
-                                  testing storage sizing.
-        """
+        """Place t=0 at a chosen point in the 672 h cycle."""
         self.start_phase_hours = start_phase_hours
 
     def is_daylight(self, t_hours: float) -> bool:
-        """
-        @brief Whether the outpost is in sunlight at time t.
-
-        @param t_hours  Simulation time [h] since t=0.
-        @return True during the lunar day, False during the night.
-
-        @note The modulo folds absolute time into one cycle, so this stays
-              correct across the full 56-day run and beyond. The comparison
-              is STRICT: phase 336.0 is the first hour of night, not the last
-              hour of day. With a 1 h timestep the simulation lands exactly
-              on that boundary once per cycle, so the operator matters.
-        """
+        """True while the outpost is in sunlight. Strict < at the terminator."""
         phase = (t_hours + self.start_phase_hours) % LUNAR_CYCLE_HOURS
         return phase < LUNAR_DAY_HOURS
 
     def solar_irradiance_fraction(self, t_hours: float) -> float:
-        """
-        @brief Fraction of peak solar flux available at time t.
-
-        @param t_hours  Simulation time [h] since t=0.
-        @return 1.0 in daylight, 0.0 at night. Always within [0, 1].
-
-        @note Delegates to is_daylight() rather than repeating the modulo, so
-              the two can never disagree about where the terminator falls.
-        @note v1 is a square wave. A sun-angle-based ramp near the terminator
-              is a reasonable v2 refinement; only this method would change.
-        """
+        """Peak-flux fraction in [0, 1]; square wave in v1."""
         return 1.0 if self.is_daylight(t_hours) else 0.0

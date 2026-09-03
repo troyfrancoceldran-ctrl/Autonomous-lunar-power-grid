@@ -23,7 +23,106 @@ Concrete implementations live in:
     assets/loads.py        -> ECLSS, ThermalControl, CommsArray, SciencePayload
 
 @note Every power quantity in this project is in WATTS and every energy
-      quantity in WATT-HOURS. Convert only at the visualization layer.
+    quantity in WATT-HOURS. Convert only at the visualization layer.
+
+
+================================================================================
+ API
+================================================================================
+
+--------------------------------------------------------------------------------
+ class PowerSource(ABC)
+--------------------------------------------------------------------------------
+Anything that can inject power onto the bus: the PV array, the FSP reactor, or
+an RFC operating in fuel-cell/discharge mode.
+
+@var name  Human-readable identifier, used in logs and plot legends.
+
+ available_power(t_hours, environment) -> float
+    Power this source COULD deliver at time t, before any dispatch decision.
+
+    @param  t_hours      Simulation time [h] since t=0.
+    @param  environment  LunarEnvironment supplying irradiance / day-night
+                         state. Sources that do not depend on it (FSP) must
+                         still accept it — the uniform signature is what lets
+                         power_bus.py iterate over mixed source types with no
+                         isinstance() checks.
+    @return Available power [W], >= 0.
+
+    @note This is the pre-dispatch ceiling, not the power actually taken.
+        Implementations must be pure: compute and return, never cache on self,
+        since the engine may query arbitrary t in any order.
+
+--------------------------------------------------------------------------------
+ class PowerStorage(ABC)
+--------------------------------------------------------------------------------
+Anything that can absorb or release energy over time: batteries, or an RFC's
+electrolyzer (charge) + fuel cell (discharge) pair. Unlike PowerSource,
+implementations are STATEFUL — charge() and discharge() mutate stored energy,
+so call order within a timestep matters.
+
+@var name  Human-readable identifier, used in logs and plot legends.
+
+ state_of_charge -> float                                          [@property]
+    Fractional fill level.
+
+    @return Fill fraction in [0, 1].
+
+    @note For the RFC this must be an energy-equivalent fill fraction derived
+        from remaining H2/O2 mass, not a separate concept — the controller has
+        to treat storage devices interchangeably.
+    @note Declared as a @property, so callers write `dev.state_of_charge` with
+        no parentheses. An implementation that omits the decorator returns a
+        method object, which compares truthy against every threshold.
+
+ charge(power_w, dt_hours) -> float
+    Attempt to absorb power for one timestep.
+
+    @param  power_w   Power offered [W], >= 0.
+    @param  dt_hours  Duration of the timestep [h].
+    @return Power ACTUALLY absorbed [W], in [0, power_w].
+
+    @warning The return value is the contract. A full or power-limited device
+        cannot take everything offered, and power_bus.py relies on the
+        difference to know how much surplus remains. Returning power_w
+        unconditionally silently fabricates storage capacity.
+
+ discharge(power_w, dt_hours) -> float
+    Attempt to deliver power for one timestep.
+
+    @param  power_w   Power requested [W], >= 0.
+    @param  dt_hours  Duration of the timestep [h].
+    @return Power ACTUALLY delivered [W], in [0, power_w].
+
+    @warning As with charge(), the shortfall between requested and delivered
+        is what tells the engine a brownout occurred.
+
+--------------------------------------------------------------------------------
+ class Load(ABC)
+--------------------------------------------------------------------------------
+Anything that consumes power: ECLSS, thermal control, comms, science payloads.
+Concrete subclasses only implement demand(); shed bookkeeping is handled in the
+base so the controller has one consistent API across all load types.
+
+@var name      Human-readable identifier, used in logs and plot legends.
+@var priority  LoadPriority tier. Lower number = shed last, restored first.
+@var shed      True when the controller has disconnected this load.
+
+ demand(t_hours) -> float
+    Power this load WANTS to draw, ignoring shed state.
+
+    @param  t_hours  Simulation time [h] since t=0.
+    @return Demanded power [W], >= 0.
+
+ effective_demand(t_hours) -> float
+    Power this load actually draws right now.
+
+    @param  t_hours  Simulation time [h] since t=0.
+    @return 0.0 if shed, otherwise demand(t_hours) [W].
+
+    @note power_bus.py must always call this, never demand() directly, when
+        computing the real load on the bus. Implemented once here rather than
+        in four subclasses, each free to get it wrong.
 """
 
 from abc import ABC, abstractmethod
@@ -32,111 +131,40 @@ from config import LoadPriority
 
 
 class PowerSource(ABC):
-    """
-    @brief Anything that can inject power onto the bus.
-
-    @details
-    Covers the PV array, the FSP reactor, or an RFC operating in
-    fuel-cell/discharge mode.
-
-    @var name  Human-readable identifier, used in logs and plot legends.
-    """
+    """Anything that can inject power onto the bus."""
 
     name: str
 
     @abstractmethod
     def available_power(self, t_hours: float, environment) -> float:
-        """
-        @brief Power this source COULD deliver at time t, before dispatch.
-
-        @param t_hours      Simulation time [h] since t=0.
-        @param environment  LunarEnvironment supplying irradiance/day-night
-                            state. Sources that do not depend on it (FSP)
-                            must still accept it — the uniform signature is
-                            what lets power_bus.py iterate over mixed source
-                            types without type checks.
-        @return Available power [W], >= 0.
-
-        @note This is the pre-dispatch ceiling, not the power actually taken.
-              Implementations must be pure: compute and return, never cache
-              on self, since the engine may query arbitrary t in any order.
-        """
+        """Pre-dispatch power ceiling [W] at time t."""
         raise NotImplementedError
 
 
 class PowerStorage(ABC):
-    """
-    @brief Anything that can absorb or release energy over time.
-
-    @details
-    Batteries, or an RFC's electrolyzer (charge) + fuel cell (discharge) pair.
-    Unlike PowerSource, implementations are STATEFUL: charge() and discharge()
-    mutate stored energy, so call order within a timestep matters.
-
-    @var name  Human-readable identifier, used in logs and plot legends.
-    """
+    """Anything that can absorb or release energy over time. Stateful."""
 
     name: str
 
     @property
     @abstractmethod
     def state_of_charge(self) -> float:
-        """
-        @brief Fractional fill level.
-
-        @return Fill fraction in [0, 1].
-
-        @note For the RFC this must be an energy-equivalent fill fraction
-              derived from remaining H2/O2 mass, not a separate concept — the
-              controller has to treat storage devices interchangeably.
-        """
+        """Fractional fill level in [0, 1]."""
         raise NotImplementedError
 
     @abstractmethod
     def charge(self, power_w: float, dt_hours: float) -> float:
-        """
-        @brief Attempt to absorb power for one timestep.
-
-        @param power_w   Power offered [W], >= 0.
-        @param dt_hours  Duration of the timestep [h].
-        @return Power ACTUALLY absorbed [W], in [0, power_w].
-
-        @warning The return value is the contract. A full or power-limited
-                 device cannot take everything offered, and power_bus.py
-                 relies on the difference to know how much surplus remains.
-                 Returning power_w unconditionally silently fabricates
-                 storage capacity.
-        """
+        """Absorb power for one timestep; returns power ACTUALLY absorbed [W]."""
         raise NotImplementedError
 
     @abstractmethod
     def discharge(self, power_w: float, dt_hours: float) -> float:
-        """
-        @brief Attempt to deliver power for one timestep.
-
-        @param power_w   Power requested [W], >= 0.
-        @param dt_hours  Duration of the timestep [h].
-        @return Power ACTUALLY delivered [W], in [0, power_w].
-
-        @warning As with charge(), the shortfall between requested and
-                 delivered is what tells the engine a brownout occurred.
-        """
+        """Deliver power for one timestep; returns power ACTUALLY delivered [W]."""
         raise NotImplementedError
 
 
 class Load(ABC):
-    """
-    @brief Anything that consumes power.
-
-    @details
-    ECLSS, thermal control, comms, science payloads. Concrete subclasses only
-    implement demand(); shed bookkeeping is handled here so the controller has
-    one consistent API across all load types.
-
-    @var name      Human-readable identifier, used in logs and plot legends.
-    @var priority  LoadPriority tier. Lower number = shed last, restored first.
-    @var shed      True when the controller has disconnected this load.
-    """
+    """Anything that consumes power."""
 
     name: str
     priority: LoadPriority
@@ -144,23 +172,9 @@ class Load(ABC):
 
     @abstractmethod
     def demand(self, t_hours: float) -> float:
-        """
-        @brief Power this load WANTS to draw, ignoring shed state.
-
-        @param t_hours  Simulation time [h] since t=0.
-        @return Demanded power [W], >= 0.
-        """
+        """Power wanted [W] at time t, ignoring shed state."""
         raise NotImplementedError
 
     def effective_demand(self, t_hours: float) -> float:
-        """
-        @brief Power this load actually draws right now.
-
-        @param t_hours  Simulation time [h] since t=0.
-        @return 0.0 if shed, otherwise demand(t_hours) [W].
-
-        @note power_bus.py must always call this, never demand() directly,
-              when computing the real load on the bus. Implemented once here
-              rather than in four subclasses, each free to get it wrong.
-        """
+        """Power actually drawn [W]; zero while shed."""
         return 0.0 if self.shed else self.demand(t_hours)
