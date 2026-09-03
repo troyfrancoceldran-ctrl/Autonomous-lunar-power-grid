@@ -38,15 +38,15 @@ an RFC operating in fuel-cell/discharge mode.
 
 @var name  Human-readable identifier, used in logs and plot legends.
 
- available_power(t_hours, environment) -> float
+available_power(t_hours, environment) -> float
     Power this source COULD deliver at time t, before any dispatch decision.
 
     @param  t_hours      Simulation time [h] since t=0.
     @param  environment  LunarEnvironment supplying irradiance / day-night
-                         state. Sources that do not depend on it (FSP) must
-                         still accept it — the uniform signature is what lets
-                         power_bus.py iterate over mixed source types with no
-                         isinstance() checks.
+                        state. Sources that do not depend on it (FSP) must
+                        still accept it — the uniform signature is what lets
+                        power_bus.py iterate over mixed source types with no
+                        isinstance() checks.
     @return Available power [W], >= 0.
 
     @note This is the pre-dispatch ceiling, not the power actually taken.
@@ -54,7 +54,7 @@ an RFC operating in fuel-cell/discharge mode.
         since the engine may query arbitrary t in any order.
 
 --------------------------------------------------------------------------------
- class PowerStorage(ABC)
+class PowerStorage(ABC)
 --------------------------------------------------------------------------------
 Anything that can absorb or release energy over time: batteries, or an RFC's
 electrolyzer (charge) + fuel cell (discharge) pair. Unlike PowerSource,
@@ -63,7 +63,7 @@ so call order within a timestep matters.
 
 @var name  Human-readable identifier, used in logs and plot legends.
 
- state_of_charge -> float                                          [@property]
+state_of_charge -> float                                          [@property]
     Fractional fill level.
 
     @return Fill fraction in [0, 1].
@@ -73,9 +73,10 @@ so call order within a timestep matters.
         to treat storage devices interchangeably.
     @note Declared as a @property, so callers write `dev.state_of_charge` with
         no parentheses. An implementation that omits the decorator returns a
-        method object, which compares truthy against every threshold.
+        bound method: an ordering comparison against a float then raises
+        TypeError, but a bare truthiness test passes silently and forever.
 
- charge(power_w, dt_hours) -> float
+charge(power_w, dt_hours) -> float
     Attempt to absorb power for one timestep.
 
     @param  power_w   Power offered [W], >= 0.
@@ -87,7 +88,7 @@ so call order within a timestep matters.
         difference to know how much surplus remains. Returning power_w
         unconditionally silently fabricates storage capacity.
 
- discharge(power_w, dt_hours) -> float
+discharge(power_w, dt_hours) -> float
     Attempt to deliver power for one timestep.
 
     @param  power_w   Power requested [W], >= 0.
@@ -98,7 +99,7 @@ so call order within a timestep matters.
         is what tells the engine a brownout occurred.
 
 --------------------------------------------------------------------------------
- class Load(ABC)
+class Load(ABC)
 --------------------------------------------------------------------------------
 Anything that consumes power: ECLSS, thermal control, comms, science payloads.
 Concrete subclasses only implement demand(); shed bookkeeping is handled in the
@@ -114,7 +115,7 @@ base so the controller has one consistent API across all load types.
     @param  t_hours  Simulation time [h] since t=0.
     @return Demanded power [W], >= 0.
 
- effective_demand(t_hours) -> float
+effective_demand(t_hours) -> float
     Power this load actually draws right now.
 
     @param  t_hours  Simulation time [h] since t=0.
