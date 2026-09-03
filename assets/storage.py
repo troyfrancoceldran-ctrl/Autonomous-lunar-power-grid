@@ -9,13 +9,13 @@
 The outpost's two storage assets, deliberately opposite in character:
 
     BatteryBank            200 kWh, 50 kW either way, round-trip 0.9025.
-                           Efficient and fast, but empties in ~36 h against
-                           a 5 kW deficit — barely a tenth of a lunar night.
+                        Efficient and fast, but empties in ~36 h against
+                        a 5 kW deficit — barely a tenth of a lunar night.
 
     RegenerativeFuelCell   120 kg H2 = 4000 kWh chemical, 2200 kWh
-                           deliverable, round-trip 0.385. Lossy and slow
-                           (12 kW ceiling), but carries the remaining 300 h
-                           of darkness and still finishes with fuel to spare.
+                        deliverable, round-trip 0.385. Lossy and slow
+                        (12 kW ceiling), but carries the remaining 300 h
+                        of darkness and still finishes with fuel to spare.
 
 That trade — efficiency against endurance — is the result this simulation
 exists to demonstrate. Sizing a battery to bridge a 336 h night alone would
@@ -28,14 +28,14 @@ discharge() mutate stored energy or mass, so call order within a timestep
 matters and each may be called only once per tick.
 
 @note Both devices share one algorithm, differing only in domain:
-      clamp the request to the device's power rating, convert power to the
-      stored quantity, cap it at the remaining headroom (or the energy
-      available above the floor), back-solve the bus-side power from the
-      capped quantity, commit, and return what ACTUALLY flowed.
+    clamp the request to the device's power rating, convert power to the
+    stored quantity, cap it at the remaining headroom (or the energy
+    available above the floor), back-solve the bus-side power from the
+    capped quantity, commit, and return what ACTUALLY flowed.
 
 @warning The efficiency asymmetry is the crux of both classes. Charging
-      MULTIPLIES by the inbound efficiency; discharging DIVIDES by the
-      outbound one. Multiply in both places and the device creates energy.
+    MULTIPLIES by the inbound efficiency; discharging DIVIDES by the
+    outbound one. Multiply in both places and the device creates energy.
 
 @see base_asset.py for the PowerStorage contract both classes satisfy.
 
@@ -61,8 +61,8 @@ Lithium battery bank. Stores energy directly in watt-hours.
 @var energy_wh              THE STATE VARIABLE — energy stored right now [Wh].
 
 __init__(name="Battery Bank", capacity_wh, initial_soc, max_charge_power_w,
-         max_discharge_power_w, charge_efficiency, discharge_efficiency,
-         soc_min, soc_max)
+        max_discharge_power_w, charge_efficiency, discharge_efficiency,
+        soc_min, soc_max)
     Construct a battery bank from its nameplate specification.
 
     @note Config constants supply DEFAULTS only, so tests can build a small
@@ -126,8 +126,8 @@ Electrolyzer + fuel cell pair. Stores energy as hydrogen MASS, not watt-hours.
 @var h2_mass_kg                 THE STATE VARIABLE — hydrogen held now [kg].
 
 __init__(name="Regenerative Fuel Cell", h2_capacity_kg, initial_soc,
-         max_charge_power_w, max_discharge_power_w, electrolyzer_efficiency,
-         fuel_cell_efficiency, specific_energy_wh_per_kg, soc_min, soc_max)
+        max_charge_power_w, max_discharge_power_w, electrolyzer_efficiency,
+        fuel_cell_efficiency, specific_energy_wh_per_kg, soc_min, soc_max)
     Construct an RFC from its nameplate specification.
 
     @note Two DIFFERENT efficiencies here, unlike the battery's single
