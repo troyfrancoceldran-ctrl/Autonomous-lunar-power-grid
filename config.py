@@ -40,6 +40,12 @@ FSP_AVAILABILITY: float = 1.0      # 1.0 = never offline; < 1.0 reserved for out
 
 # --- Battery ----------------------------------------------------------------
 
+BATTERY_CAPACITY_WH: float = 200_000.0      # 200 kWh usable-nameplate energy
+BATTERY_INITIAL_SOC: float = 1.00           # starts full at t=0 (lunar dawn)
+
+BATTERY_MAX_CHARGE_POWER_W: float = 50_000.0     # C-rate ceiling, bus side
+BATTERY_MAX_DISCHARGE_POWER_W: float = 50_000.0
+
 BATTERY_SOC_MIN: float = 0.05      # hard floor, fraction of capacity
 BATTERY_SOC_MAX: float = 1.00
 BATTERY_CHARGE_EFFICIENCY: float = 0.95
