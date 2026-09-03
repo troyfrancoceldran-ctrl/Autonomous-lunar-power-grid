@@ -23,6 +23,21 @@ N_STEPS: int = int(SIM_DURATION_HOURS / TIME_STEP_HOURS)
 RANDOM_SEED: int = 42
 
 
+# --- Generation -------------------------------------------------------------
+
+# Solar constant at 1 AU. The Moon has no atmosphere, so unlike Earth's surface
+# (~1000 W/m^2 at best) the full extraterrestrial value reaches the panels.
+SOLAR_CONSTANT_W_PER_M2: float = 1361.0
+
+PV_AREA_M2: float = 100.0          # PROVISIONAL — revisit once Step 6 fixes real loads
+PV_EFFICIENCY: float = 0.30        # triple-junction space-grade cells
+PV_PACKING_FACTOR: float = 0.90    # cell-to-array area loss, wiring, mismatch, pointing
+
+# Fission Surface Power — NASA Kilopower/FSP class, runs through the night.
+FSP_RATED_POWER_W: float = 10_000.0
+FSP_AVAILABILITY: float = 1.0      # 1.0 = never offline; < 1.0 reserved for outage modelling
+
+
 # --- Battery ----------------------------------------------------------------
 
 BATTERY_SOC_MIN: float = 0.05      # hard floor, fraction of capacity
