@@ -19,7 +19,7 @@ Authors are Troy Celdran with JARVIS (Claude Opus 5) as co-author.
 - [x] Step 3 — `assets/generation.py`: PVArray, FissionSurfacePower (user)
 - [x] Step 4 — `assets/storage.py`: BatteryBank SoC model (user, with Claude debugging)
 - [x] Step 5 — `assets/storage.py`: RegenerativeFuelCell H2/O2 mass model (user)
-- [ ] Step 6 — `assets/loads.py`: ECLSS, ThermalControl, CommsArray, SciencePayload
+- [x] Step 6 — `assets/loads.py`: ECLSS, ThermalControl, CommsArray, SciencePayload (user)
 - [ ] Step 7 — `controller.py`: AutonomousController (priority shed/restore + hysteresis)
 - [ ] Step 8 — `power_bus.py`: wire generation + loads + storage + controller together per tick
 - [ ] Step 9 — `simulation_engine.py`: 56-day time-marching loop + history log
