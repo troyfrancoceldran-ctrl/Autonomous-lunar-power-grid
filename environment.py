@@ -20,25 +20,25 @@ environment having to be "stepped" forward in lockstep with the engine.
 
 
 ================================================================================
- API
+API
 ================================================================================
 
 --------------------------------------------------------------------------------
- class LunarEnvironment
+class LunarEnvironment
 --------------------------------------------------------------------------------
 Pure model of the lunar day/night cycle.
 
 @var start_phase_hours  Offset [h] placing t=0 somewhere within the cycle.
 
- __init__(start_phase_hours=0.0)
+__init__(start_phase_hours=0.0)
     Construct an environment with a chosen starting phase.
 
     @param start_phase_hours  Where t=0 sits within the 672 h cycle [h].
-                              0.0 starts at lunar dawn; 336.0 starts at
-                              nightfall, which is the stress scenario for
-                              testing storage sizing.
+                            0.0 starts at lunar dawn; 336.0 starts at
+                            nightfall, which is the stress scenario for
+                            testing storage sizing.
 
- is_daylight(t_hours) -> bool
+is_daylight(t_hours) -> bool
     Whether the outpost is in sunlight at time t.
 
     @param  t_hours  Simulation time [h] since t=0.
@@ -50,7 +50,7 @@ Pure model of the lunar day/night cycle.
         not the last hour of day. With a 1 h timestep the simulation lands
         exactly on that boundary once per cycle, so the operator matters.
 
- solar_irradiance_fraction(t_hours) -> float
+solar_irradiance_fraction(t_hours) -> float
     Fraction of peak solar flux available at time t.
 
     @param  t_hours  Simulation time [h] since t=0.

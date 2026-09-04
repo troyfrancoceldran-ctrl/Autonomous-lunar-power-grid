@@ -12,11 +12,21 @@ from enum import IntEnum
 
 TIME_STEP_HOURS: float = 1.0
 
-LUNAR_DAY_HOURS: float = 14 * 24        # 336 h of continuous sunlight
-LUNAR_NIGHT_HOURS: float = 14 * 24      # 336 h of total darkness
-LUNAR_CYCLE_HOURS: float = LUNAR_DAY_HOURS + LUNAR_NIGHT_HOURS  # 672 h (~28 Earth days)
+# The Moon is tidally locked, so its ROTATION period is 27.3 d — but a point on
+# the surface returns to the same position relative to the SUN only after the
+# synodic period of 29.53 d = 708.7 h. That is the figure a power system must
+# survive, and it is what NASA's Fission Surface Power requirement refers to
+# when it calls for "at least 354 hr of nighttime energy storage".
+# The common "14 Earth days = 336 h" shorthand understates the night by 5.1%.
+LUNAR_SYNODIC_PERIOD_HOURS: float = 708.7
 
-SIM_DURATION_DAYS: int = 56             # >= 2 full lunar cycles, per requirement
+LUNAR_DAY_HOURS: float = LUNAR_SYNODIC_PERIOD_HOURS / 2.0     # 354.35 h of sunlight
+LUNAR_NIGHT_HOURS: float = LUNAR_SYNODIC_PERIOD_HOURS / 2.0   # 354.35 h of darkness
+LUNAR_CYCLE_HOURS: float = LUNAR_DAY_HOURS + LUNAR_NIGHT_HOURS
+
+# >= 2 full synodic cycles (1417.4 h) so the run captures a complete
+# charge/discharge round trip twice over, not 1.9 of one.
+SIM_DURATION_DAYS: int = 60
 SIM_DURATION_HOURS: float = SIM_DURATION_DAYS * 24
 N_STEPS: int = int(SIM_DURATION_HOURS / TIME_STEP_HOURS)
 
@@ -33,9 +43,28 @@ PV_AREA_M2: float = 100.0          # PROVISIONAL — revisit once Step 6 fixes r
 PV_EFFICIENCY: float = 0.30        # triple-junction space-grade cells
 PV_PACKING_FACTOR: float = 0.90    # cell-to-array area loss, wiring, mismatch, pointing
 
+# Lunar regolith dust is electrostatically charged, clingy and abrasive; NASA
+# measurements show short-circuit current falling exponentially with deposited
+# dust mass, and every landing nearby adds more. A fixed derate is a crude
+# stand-in for a mechanism that really worsens over mission life.
+PV_DUST_DERATE: float = 0.95
+
+# Sun-elevation profile. A fixed horizontal array at an equatorial site sees
+# irradiance vary as sin(pi * phase / day), averaging 2/pi = 0.637 of peak; a
+# two-axis tracker or a NASA-style Vertical Solar Array holds close to peak all
+# day. Assuming the wrong one overstates daily energy by 36%.
+PV_SUN_TRACKING: bool = False      # False = fixed array, sinusoidal profile
+
 # Fission Surface Power — NASA Kilopower/FSP class, runs through the night.
+# NASA's FSP requirement set: 40 kWe class (10 kWe demonstrator), >= 10 year
+# design life, autonomous start/stop without human assistance.
 FSP_RATED_POWER_W: float = 10_000.0
-FSP_AVAILABILITY: float = 1.0      # 1.0 = never offline; < 1.0 reserved for outage modelling
+FSP_AVAILABILITY: float = 1.0      # long-run availability; 1.0 = idealised
+
+# A scripted outage, so contingency behaviour is reproducible rather than
+# stochastic. Set FSP_OUTAGE_START_HOURS to None to disable.
+FSP_OUTAGE_START_HOURS: float | None = None
+FSP_OUTAGE_DURATION_HOURS: float = 24.0
 
 
 # --- Battery ----------------------------------------------------------------
@@ -46,6 +75,11 @@ BATTERY_INITIAL_SOC: float = 1.00           # starts full at t=0 (lunar dawn)
 BATTERY_MAX_CHARGE_POWER_W: float = 50_000.0     # C-rate ceiling, bus side
 BATTERY_MAX_DISCHARGE_POWER_W: float = 50_000.0
 
+# 95% depth of discharge would be reckless in LEO, where practice keeps DoD
+# below 30% because the spacecraft sees ~5000 cycles a year. A lunar surface
+# system sees ONE cycle per synodic period — about 124 in a 10-year life — so
+# deep discharge is affordable here. The justification is cycle count, not
+# optimism: change the mission profile and this number must change with it.
 BATTERY_SOC_MIN: float = 0.05      # hard floor, fraction of capacity
 BATTERY_SOC_MAX: float = 1.00
 BATTERY_CHARGE_EFFICIENCY: float = 0.95

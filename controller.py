@@ -19,19 +19,19 @@ no pandas, nothing that will not port to an MCU.
 
 TWO INDEPENDENT GUARDS against chatter:
 
-  Hysteresis   Shed below 0.30, restore above 0.45, and DO NOTHING between.
-               Were both thresholds 0.30, the outpost would shed at 0.2999,
-               recover to 0.3001, restore, drop again, and oscillate every
-               hour for the rest of the night. Contactors have finite
-               switching lifetimes; a chattering controller destroys them.
-               The dead band is not an oversight — it is the mechanism.
-               The same idea appears as Schmitt-trigger input thresholds and
-               as the deadband in a thermostat.
+Hysteresis   Shed below 0.30, restore above 0.45, and DO NOTHING between.
+            Were both thresholds 0.30, the outpost would shed at 0.2999,
+            recover to 0.3001, restore, drop again, and oscillate every
+            hour for the rest of the night. Contactors have finite
+            switching lifetimes; a chattering controller destroys them.
+            The dead band is not an oversight — it is the mechanism.
+            The same idea appears as Schmitt-trigger input thresholds and
+            as the deadband in a thermostat.
 
-  Dwell time   A given load may not change state more than once per
-               MIN_ACTION_DWELL_HOURS, independently of SoC. Hysteresis
-               stops oscillation around a threshold; dwell stops rapid
-               successive action on one device.
+Dwell time   A given load may not change state more than once per
+            MIN_ACTION_DWELL_HOURS, independently of SoC. Hysteresis
+            stops oscillation around a threshold; dwell stops rapid
+            successive action on one device.
 
 @note One action per call, never a bulk shed. If the deficit persists, SoC
     keeps falling and the next tick sheds the next load — a staircase rather
@@ -83,7 +83,7 @@ Priority-ordered shed/restore with hysteresis and a per-load dwell timer.
 @var _last_change_h     THE STATE — {load name: time it last changed} [h].
 
 __init__(name="Autonomous Controller", shed_threshold, restore_threshold,
-         min_dwell_hours)
+        min_dwell_hours)
     Construct a controller from its policy thresholds.
 
     @note _last_change_h is a new kind of state: not an accumulating
@@ -175,9 +175,9 @@ class AutonomousController(ControlStrategy):
         """Shed or restore at most one load this tick; returns it, or None."""
         if soc < self.shed_threshold:
             candidates = [load for load in loads
-                          if not load.shed
-                          and load.priority is not LoadPriority.CRITICAL
-                          and self._dwell_elapsed(load, t_hours)]
+                        if not load.shed
+                        and load.priority is not LoadPriority.CRITICAL
+                        and self._dwell_elapsed(load, t_hours)]
             if not candidates:
                 return None
             # Largest priority VALUE = least important load, so shed it first.
@@ -188,8 +188,8 @@ class AutonomousController(ControlStrategy):
 
         if soc > self.restore_threshold:
             candidates = [load for load in loads
-                          if load.shed
-                          and self._dwell_elapsed(load, t_hours)]
+                        if load.shed
+                        and self._dwell_elapsed(load, t_hours)]
             if not candidates:
                 return None
             # Smallest priority VALUE = most important load, so restore it first.
