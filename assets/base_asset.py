@@ -242,7 +242,7 @@ class PowerStorage(ABC):
         if dt_hours <= 0:
             return 0.0
         return min(self.max_discharge_power_w,
-                   self.deliverable_energy_wh / dt_hours)
+                self.deliverable_energy_wh / dt_hours)
 
 
 class Load(ABC):

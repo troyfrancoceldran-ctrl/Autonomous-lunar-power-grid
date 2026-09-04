@@ -269,6 +269,14 @@
   .chip.low  { background: var(--sev-pass-bg); color: var(--sev-pass); }
   .chip.done { background: var(--sev-pass-bg); color: var(--sev-pass); }
   .chip.open { background: var(--surface-alt); color: var(--ink-soft); }
+  .resolution {
+    margin-top: 0.85rem; padding-left: 0.9rem;
+    border-left: 2px solid var(--sev-pass);
+    color: var(--ink-soft);
+  }
+  .resolution strong { color: var(--sev-pass); }
+  .resolution.note { border-left-color: var(--accent); }
+  .resolution.note strong { color: var(--accent); }
   .chip.auth { background: transparent; color: var(--ink-faint); border: 1px solid var(--rule); font-weight: 500; letter-spacing: 0.05em; text-transform: none; font-family: "IBM Plex Mono", monospace; }
 
   /* ---------- tables ---------- */
@@ -356,7 +364,7 @@
       <div><dt>Inspected</dt><dd>2026-09-04</dd></div>
       <div><dt>Scope</dt><dd>Steps 0–7, 19 commits</dd></div>
       <div><dt>Findings</dt><dd>3 high · 2 medium · 1 low</dd></div>
-      <div><dt>Closed</dt><dd>3 of 6</dd></div>
+      <div><dt>Closed</dt><dd>6 of 6 · 2026-09-04</dd></div>
       <div><dt>Inspectors</dt><dd>T. Celdran · JARVIS</dd></div>
     </dl>
   </header>
@@ -412,10 +420,12 @@
           <h3>PV square wave silently assumes a sun-tracking array</h3>
           <div class="ftags">
             <span class="chip high">High</span>
-            <span class="chip open">Open — W01</span>
+            <span class="chip done">Closed — W01</span>
             <span class="chip auth">Solar geometry · NASA VSAT</span>
           </div>
-          <p>Irradiance returns a flat 1.0 for the whole lunar day. That is only true for a two-axis tracker or a NASA-style Vertical Solar Array. A fixed horizontal array at an equatorial site sees output vary as the sine of solar elevation, averaging <span class="num">2/π = 0.637</span> of peak — so the current model overstates daily energy by <strong>36 %</strong> unless tracking is declared. <code>PV_SUN_TRACKING</code> now records the assumption explicitly; the physics is still to be written.</p>
+          <p>Irradiance returns a flat 1.0 for the whole lunar day. That is only true for a two-axis tracker or a NASA-style Vertical Solar Array. A fixed horizontal array at an equatorial site sees output vary as the sine of solar elevation, averaging <span class="num">2/π = 0.637</span> of peak — so the model overstated daily energy by <strong>36 %</strong> unless tracking is declared.</p>
+          <p class="resolution"><strong>Resolved</strong> in <code>caf29c9</code>. <code>solar_elevation_fraction()</code> returns <code>sin(π · phase / LUNAR_DAY_HOURS)</code> during the day and 0.0 at night, with the phase modulo factored into a shared <code>_phase_hours()</code> helper so the terminator is defined in exactly one place. <code>solar_irradiance_fraction()</code> deliberately stays a square wave: it answers <em>is there sun</em>, the new method answers <em>how much</em>, and <code>PVArray</code> selects between them. Verified against nine reference values; measured mean elevation over daylight <span class="num">0.619</span>.</p>
+          <p class="resolution note"><strong>Method note.</strong> The first two implementations passed all nine spec values while <code>is_daylight()</code> was returning <code>True</code> at midnight — the defensive <code>max(0.0, …)</code> clamp was absorbing a raw sine of <span class="num">−0.96</span> at deep night and reporting a plausible 0.0. The verification table alone could not see it; an invariant sweep asserting that <code>is_daylight</code> varies with <em>t</em> caught it immediately. A guard that silently corrects a fault also hides it, and tests must assert on the gate, not only downstream of it.</p>
         </div>
       </article>
 
@@ -426,10 +436,12 @@
           <h3>The reactor never fails</h3>
           <div class="ftags">
             <span class="chip high">High</span>
-            <span class="chip open">Open — W03</span>
+            <span class="chip done">Closed — W03</span>
             <span class="chip auth">NASA FSP autonomy</span>
           </div>
-          <p><code>FSP_AVAILABILITY = 1.0</code> models a reactor that is online every hour of a ten-year life. NASA’s requirement set assumes autonomous start and stop precisely because outages happen. Worse, the contingency is already known to be survivable-by-luck rather than by design: with the battery flat and the tanks at 95 %, an aggregate state-of-charge signal reads <span class="num">0.872</span> while a reactor outage leaves <span class="num">7.5 kW</span> of load unserved — including part of life support.</p>
+          <p><code>FSP_AVAILABILITY = 1.0</code> models a reactor that is online every hour of a ten-year life. NASA’s requirement set assumes autonomous start and stop precisely because outages happen. Worse, the contingency was survivable-by-luck rather than by design: with the battery flat and the tanks at 95 %, an aggregate state-of-charge signal reads <span class="num">0.872</span> while a reactor outage leaves <span class="num">7.5 kW</span> of load unserved — including part of life support.</p>
+          <p class="resolution"><strong>Resolved</strong> in <code>139da44</code> and <code>e16d036</code>. <code>FissionSurfacePower</code> takes a scripted outage window, half-open (<code>start ≤ t &lt; start + duration</code>) and firing once rather than per cycle, so contingency behaviour is reproducible instead of stochastic. Default config leaves <code>FSP_OUTAGE_START_HOURS = None</code>; the scenario switches it on. The second half of this finding — the outpost having no way to <em>notice</em> the 7.5 kW deficit — is closed by W04's <code>shortfall_w</code> signal.</p>
+          <p class="resolution note"><strong>Guard note.</strong> The window test is <code>is not None</code>, never truthiness. An outage beginning at <span class="num">t = 0.0</span> — cold start with the reactor still offline — is a legitimate scenario, and <code>if self.outage_start_hours:</code> would silently read it as <em>disabled</em>. Legal Python, wrong answer, no error. Verified explicitly.</p>
         </div>
       </article>
 
@@ -440,10 +452,12 @@
           <h3>No lunar dust derate on the array</h3>
           <div class="ftags">
             <span class="chip med">Medium</span>
-            <span class="chip open">Open — W02</span>
+            <span class="chip done">Closed — W02</span>
             <span class="chip auth">NTRS 19910020924</span>
           </div>
           <p>NASA measurements show cell short-circuit current falling <em>exponentially</em> with deposited dust mass, and every nearby landing adds more — roughly 0.28 mg/cm² at 2 km after ten missions. Regolith is also an insulator, so it degrades radiator performance at the same time. <code>PV_DUST_DERATE</code> is a fixed stand-in for a mechanism that genuinely worsens across mission life.</p>
+          <p class="resolution"><strong>Resolved</strong> in <code>139da44</code>. <code>PVArray</code> now takes <code>dust_derate</code> and <code>sun_tracking</code>. The derate is kept <em>separate</em> from <code>packing_factor</code> although both are dimensionless multipliers near 1: packing factor is array geometry and wiring, dust is a surface condition, and only one of them becomes a function of mission elapsed time in a later revision. Collapsing them would destroy that seam. Dusted peak <span class="num">34 909.65 W</span>, down from 36 747 W.</p>
+          <p class="resolution note"><strong>Design note.</strong> <code>sun_tracking</code> <em>selects</em> the daily profile through an <code>if</code>/<code>else</code>; it does not scale the output. A first implementation multiplied by the boolean instead, and since <code>PV_SUN_TRACKING</code> is <code>False</code>, the array produced <span class="num">0 W</span> at every hour of the run — including local noon. A bool used as a factor can only annihilate or do nothing; used as a branch it states which site is being modelled. The peak-output-over-a-cycle assertion that caught this belongs in the test suite for every source: <em>a generator that never generates is a test failure, not a quiet result.</em></p>
         </div>
       </article>
 
@@ -554,8 +568,8 @@
   </section>
 
   <section>
-    <h2>Remediation work order</h2>
-    <p>Three open findings and one design decision, in the order they should be taken. Numbered because they are a sequence: W01 changes what the environment reports, which W02 consumes.</p>
+    <h2>Remediation work order <span class="chip done" style="vertical-align:middle;">All closed · 2026-09-04</span></h2>
+    <p>Three findings and one design decision, in the order they were taken. Numbered because they are a sequence: W01 changed what the environment reports, which W02 consumes. All four landed the same day as the inspection; the specifications below are kept as issued, with outcomes recorded against each.</p>
 
     <div class="order">
 
@@ -592,6 +606,7 @@ return (SOLAR_CONSTANT_W_PER_M2 * self.area_m2 * self.efficiency
             <li>Expect peak to fall <span class="mono">36 747 → 34 910 W</span> from dust alone, and daily <em>energy</em> to fall a further 36 % once tracking is off.</li>
             <li>That is a large reduction. Re-check the night energy balance afterwards — <code>PV_AREA_M2</code> may need to grow, which is itself a realistic finding.</li>
           </ul>
+          <p class="resolution"><strong>Outcome — the array was not resized.</strong> Peak fell as predicted to <span class="num">34 909.65 W</span> and daylight energy to 62 % of the square-wave figure, but the 60-day balance still closes with <span class="num">0 kWh</span> unserved. Generation is <span class="num">134 %</span> of demand (PV 15 826 kWh + FSP 14 400 kWh against 22 572 kWh drawn); the RFC reserve floor merely narrows from <span class="num">0.241</span> to <span class="num">0.174</span>. Daylight surplus of 11 749 kWh far exceeds the 4 720 kWh needed to refill the tanks, so surplus was never the binding constraint — and extra area buys almost nothing, 200 m² lifting the floor only to 0.203. <code>PV_AREA_M2</code> stays at 100 and the narrower margin is recorded as the honest cost of removing two flattering assumptions.</p>
         </div>
       </div>
 
@@ -626,10 +641,25 @@ available_discharge_power_w  # what I could deliver right now, this instant</cod
             <li>Every term is measurable at the start of the tick, so this is a real-time calculation and not a forecast — which keeps it inside IEEE 2030.7’s core-function rule.</li>
             <li>The controller acts <em>before</em> dispatch, on state carried from the previous tick. Sample, decide, actuate, let the hour play out — the same loop the microcontroller will run.</li>
           </ul>
+          <p class="resolution"><strong>Outcome — two properties, not three.</strong> <code>available_discharge_power_w(dt)</code> turned out to be <span class="mono">min(rating, deliverable_energy_wh / dt)</span>, both operands already interface members, so the expression is identical for every storage device that will ever exist. It was made <em>concrete</em> on <code>PowerStorage</code> rather than abstract — the same reasoning <code>Load.effective_demand()</code> already applies. It also takes <code>dt_hours</code>: 100 Wh is 100 W over an hour and 1000 W over six minutes, and a ceiling ignoring the step would report full nameplate power for a device with minutes left.</p>
+          <p class="resolution"><strong>Measured, both devices at nameplate:</strong> battery 180 500 Wh deliverable and 50 kW; RFC 2 090 000 Wh and 12 kW; fleet 2 270 500 Wh and 62 kW. The battery is <span class="num">7.95 %</span> of fleet reserve — the figure that rules out a mean-of-SoCs aggregate. In the motivating case (battery at floor, tanks 0.95) the fleet reports <code>aggregate_soc</code> <span class="num">0.872</span> alongside a 12 kW ceiling and <span class="num">7.5 kW</span> unserved against a 19.5 kW night load. Both numbers correct; neither sufficient alone.</p>
+          <p class="resolution note"><strong>Control note.</strong> The controller runs three branches — power emergency, energy low, recovery — and the emergency branch bypasses the dwell timer, the only place in the file that does. Dwell prevents chatter around a threshold; an unserved-power event is not chatter but a live failure, and an uncontrolled brownout drops loads in whatever order physics chooses. Recovery is gated on <em>both</em> signals: without that, the controller sheds on power and restores on energy every tick, because reserves read healthy precisely <em>because</em> the shed loads are not drawing from them. CRITICAL is excluded from both shed branches — ECLSS survives eight consecutive emergency ticks at <code>aggregate_soc</code> 0.05.</p>
         </div>
       </div>
 
     </div>
+  </section>
+
+  <section>
+    <h2>What the remediation taught</h2>
+    <p>Three of the four work orders failed their first implementation, and every failure shared a shape worth recording: <strong>a value used in the wrong grammatical role, producing a plausible number rather than an error.</strong></p>
+    <ul>
+      <li><code>is_daylight</code> returned <code>start_phase_hours &lt; LUNAR_DAY_HOURS</code> — constant, so the lunar night ceased to exist. All nine reference values still passed, because the clamp absorbed the negative sine at midnight.</li>
+      <li><code>PVArray</code> multiplied by the <code>sun_tracking</code> boolean instead of branching on it. <code>False == 0</code>, so the array produced 0 W at every hour of the run.</li>
+      <li>The RFC's two new members were written without <code>@property</code>, so they returned bound methods. The abstract declaration did not catch it — Python checks only that the name exists — and the failure surfaced two files away, in the base class's division and in the fleet sum.</li>
+    </ul>
+    <p>None of these raised an exception at the point of the mistake. The tests that caught them were not value comparisons but <em>invariants</em>: does <code>is_daylight</code> vary with time; does the array ever generate; is this member actually a property. Step 11's suite should assert those directly.</p>
+    <p class="resolution note"><strong>On the verification itself.</strong> Three of the checking harnesses written during this remediation contained errors of their own — an expected value computed at the wrong hour, a device chosen in the rating-limited regime for a test of energy-limited scaling, and load names retyped as string literals rather than read from the classes. A test that fails for its own reasons is cheap; a test that <em>passes</em> for its own reasons is what let the first two W01 implementations through. The asymmetry is worth remembering.</p>
   </section>
 
   <section>
@@ -647,7 +677,7 @@ available_discharge_power_w  # what I could deliver right now, this instant</cod
   </section>
 
   <footer>
-    Inspection closed 2026-09-04 · 3 findings remediated, 3 raised as work orders · Steps 8–12 outstanding
+    Inspection closed 2026-09-04 · all 6 findings remediated across W01–W04 · 29 commits · Steps 8–12 outstanding
   </footer>
 
 </div>

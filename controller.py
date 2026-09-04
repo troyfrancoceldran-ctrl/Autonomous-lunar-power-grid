@@ -138,7 +138,7 @@ update(t_hours, aggregate_soc, loads, shortfall_w) -> Load | None
         1. POWER EMERGENCY   shortfall_w > 0
         2. ENERGY LOW        aggregate_soc < shed_threshold
         3. RECOVERY          aggregate_soc > restore_threshold
-                             AND shortfall_w <= 0
+                            AND shortfall_w <= 0
 
     Power comes first because it is the acute failure: the outpost is already
     not serving its loads. Energy is the slow one — reserves draining while
@@ -309,7 +309,7 @@ class AutonomousController(ControlStrategy):
         return t_hours - last_h >= self.min_dwell_hours
 
     def update(self, t_hours: float, aggregate_soc: float, loads: list,
-               shortfall_w: float):
+            shortfall_w: float):
         """Shed or restore at most one load this tick; returns it, or None."""
         # POWER emergency. The bus is already failing to serve what is
         # connected, so act now — dwell is deliberately not consulted.
