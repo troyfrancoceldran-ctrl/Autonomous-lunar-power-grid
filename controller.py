@@ -124,18 +124,50 @@ _dwell_elapsed(load, t_hours) -> bool                              [internal]
         which is exactly the question being asked: have I touched this load
         before?
 
-update(t_hours, soc, loads) -> Load | None
+update(t_hours, aggregate_soc, loads, shortfall_w) -> Load | None
     Shed or restore at most one load.
 
-    @param  t_hours  Simulation time [h] since t=0.
-    @param  soc      Overall storage reserve in [0, 1].
-    @param  loads    Every Load on the bus.
+    @param  t_hours        Simulation time [h] since t=0.
+    @param  aggregate_soc  Fleet reserve in [0, 1].
+    @param  loads          Every Load on the bus.
+    @param  shortfall_w    Power the bus could not serve this tick [W].
     @return The Load acted on, or None.
 
-    Below shed_threshold, picks the least important running load that is not
-    CRITICAL and whose dwell has elapsed. Above restore_threshold, picks the
-    most important shed load whose dwell has elapsed. Between the two, does
-    nothing at all.
+    THREE branches, tried in this order:
+
+        1. POWER EMERGENCY   shortfall_w > 0
+        2. ENERGY LOW        aggregate_soc < shed_threshold
+        3. RECOVERY          aggregate_soc > restore_threshold
+                             AND shortfall_w <= 0
+
+    Power comes first because it is the acute failure: the outpost is already
+    not serving its loads. Energy is the slow one — reserves draining while
+    supply still meets demand. Between the thresholds, with no shortfall,
+    the controller does nothing at all.
+
+    @warning Branch 1 bypasses the dwell timer, and it is the only place in
+        this file that does. Dwell exists to stop chatter around a threshold;
+        an unserved-power event is not chatter, and an uncontrolled brownout
+        drops loads in whatever order physics chooses. Shedding deliberately
+        in priority order beats waiting an hour to be tidy. Terrestrial grids
+        make the same trade in under-frequency load shedding.
+
+    @warning Branch 3's second condition is NOT optional. Without it the
+        controller sheds on the power signal, restores on the energy signal,
+        and oscillates every tick — and the trap is subtle, because reserves
+        can read healthy precisely BECAUSE the shed loads are not drawing
+        from them. Restoring is what brings the shortfall back.
+
+    @note CRITICAL is excluded in branch 1 as in branch 2. ECLSS never sheds,
+        even in a brownout: losing life support to save the bus is not a trade
+        this controller may make. If the deficit outlives every sheddable
+        load, the correct behaviour is to report unserved power and let the
+        record show it.
+
+    @note shortfall_w is never computed here. power_bus.py measures it as
+        max(0, demand - what generation and storage could actually deliver)
+        and passes it in, exactly as it does aggregate_soc. A strategy
+        reacts to the bus; it does not model it.
 
     @note LoadPriority is an IntEnum where LOWER number = MORE important
         (CRITICAL 0, HIGH 1, MEDIUM 2, LOW 3). The selection therefore
@@ -276,25 +308,24 @@ class AutonomousController(ControlStrategy):
             return True
         return t_hours - last_h >= self.min_dwell_hours
 
-    # ==== W04 — START HERE (3 of 3) ==========================================
-    # Three edits to update() below, then delete this banner:
-    #
-    #   1. signature: (self, t_hours, aggregate_soc, loads, shortfall_w)
-    #      — rename soc -> aggregate_soc in both existing branches too
-    #   2. NEW first branch, above everything:  if shortfall_w > 0:
-    #      shed the least important non-CRITICAL running load, IGNORING dwell
-    #   3. restore branch gains a second condition:
-    #      if aggregate_soc > self.restore_threshold and shortfall_w <= 0:
-    #
-    # Edit 3 is not optional — without it the controller sheds on the power
-    # signal, restores on the energy signal, and oscillates every tick.
-    # Full spec: the "SPEC — W04, controller half" section in the module
-    # docstring above.
-    # =========================================================================
-
-    def update(self, t_hours: float, soc: float, loads: list):
+    def update(self, t_hours: float, aggregate_soc: float, loads: list,
+               shortfall_w: float):
         """Shed or restore at most one load this tick; returns it, or None."""
-        if soc < self.shed_threshold:
+        # POWER emergency. The bus is already failing to serve what is
+        # connected, so act now — dwell is deliberately not consulted.
+        if shortfall_w > 0:
+            candidates = [load for load in loads
+                        if not load.shed
+                        and load.priority is not LoadPriority.CRITICAL]
+            if not candidates:
+                return None
+            target = max(candidates, key=lambda load: load.priority)
+            target.shed = True
+            self._last_change_h[target.name] = t_hours
+            return target
+
+        # ENERGY low. Reserves are draining but supply still meets demand.
+        if aggregate_soc < self.shed_threshold:
             candidates = [load for load in loads
                         if not load.shed
                         and load.priority is not LoadPriority.CRITICAL
@@ -307,7 +338,10 @@ class AutonomousController(ControlStrategy):
             self._last_change_h[target.name] = t_hours
             return target
 
-        if soc > self.restore_threshold:
+        # RECOVERY. Both signals must agree before anything comes back: the
+        # reserve may look healthy precisely because the shed loads are not
+        # drawing from it.
+        if aggregate_soc > self.restore_threshold and shortfall_w <= 0:
             candidates = [load for load in loads
                         if load.shed
                         and self._dwell_elapsed(load, t_hours)]
