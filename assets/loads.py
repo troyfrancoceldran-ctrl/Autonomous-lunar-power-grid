@@ -1,7 +1,7 @@
 """
 @file    loads.py
 @brief   Concrete Load implementations: ECLSS, ThermalControl, CommsArray,
-         SciencePayload.
+        SciencePayload.
 @author  Troy Celdran
 @author  JARVIS (Claude Opus 5) — co-author
 @date    2026-09-04
@@ -51,7 +51,7 @@ Life support: atmosphere circulation, CO2 scrubbing, water recovery.
 @var priority  LoadPriority.CRITICAL.
 
 __init__(name="Environmental Control and Life Support System",
-         power_w=ECLSS_POWER_W, priority=LoadPriority.CRITICAL)
+        power_w=ECLSS_POWER_W, priority=LoadPriority.CRITICAL)
     Construct the life-support load.
 
 demand(t_hours) -> float
@@ -77,7 +77,7 @@ job, from rejecting heat to adding it.
 @var priority        LoadPriority.HIGH.
 
 __init__(environment, name="Thermal Control", day_power_w, night_power_w,
-         priority=LoadPriority.HIGH)
+        priority=LoadPriority.HIGH)
     Construct the thermal load against a given environment.
 
     @param environment  Required, and deliberately FIRST with no default —
@@ -109,7 +109,7 @@ High-gain Earth link: one transmit window per Earth day, standby between.
 @var priority          LoadPriority.MEDIUM.
 
 __init__(name="Communications Array", active_power_w, standby_power_w,
-         window_hours, period_hours, priority=LoadPriority.MEDIUM)
+        window_hours, period_hours, priority=LoadPriority.MEDIUM)
     Construct the comms load from its duty cycle.
 
 demand(t_hours) -> float
@@ -136,7 +136,7 @@ Science campaigns: drills, rovers, instruments. Fully interruptible.
 @var priority         LoadPriority.LOW.
 
 __init__(name="Science Payload", active_power_w, idle_power_w, window_hours,
-         period_hours, priority=LoadPriority.LOW)
+        period_hours, priority=LoadPriority.LOW)
     Construct the science load from its duty cycle.
 
 demand(t_hours) -> float
