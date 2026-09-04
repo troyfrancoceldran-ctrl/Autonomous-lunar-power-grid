@@ -8,7 +8,7 @@
 @details
 The outpost's two generation assets, with opposite characters:
 
-    PVArray               36.7 kW peak, but ZERO for 336 consecutive hours.
+    PVArray               36.75 kW peak, but ZERO for 354.35 consecutive hours.
     FissionSurfacePower   10 kW flat, indifferent to the sun.
 
 That asymmetry is the whole engineering problem. Anything the outpost draws

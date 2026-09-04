@@ -22,7 +22,7 @@ Authors are Troy Celdran with JARVIS (Claude Opus 5) as co-author.
 - [x] Step 6 — `assets/loads.py`: ECLSS, ThermalControl, CommsArray, SciencePayload (user)
 - [x] Step 7 — `controller.py`: AutonomousController (priority shed/restore + hysteresis) (user, ControlStrategy interface by Claude)
 - [ ] Step 8 — `power_bus.py`: wire generation + loads + storage + controller together per tick
-- [ ] Step 9 — `simulation_engine.py`: 56-day time-marching loop + history log
+- [ ] Step 9 — `simulation_engine.py`: 60-day time-marching loop + history log
 - [ ] Step 10 — `metrics.py` + `visualization.py`: KPIs and plots
 - [ ] Step 11 — `tests/`: pytest coverage per module
 - [ ] Step 12 — polish: docstrings, README run instructions, push to GitHub

@@ -6,8 +6,9 @@
 @date    2026-09-03
 
 @details
-The outpost sits through a 672 h lunar cycle: 336 h of continuous sunlight
-followed by 336 h of total darkness. This module answers one question —
+The outpost sits through the 708.7 h lunar synodic cycle: 354.35 h of
+continuous sunlight followed by 354.35 h of total darkness. This module
+answers one question —
 "how much sun is there at time t?" — and nothing else.
 
 It is deliberately STATELESS beyond a single constructor argument, so
@@ -33,10 +34,10 @@ Pure model of the lunar day/night cycle.
 __init__(start_phase_hours=0.0)
     Construct an environment with a chosen starting phase.
 
-    @param start_phase_hours  Where t=0 sits within the 672 h cycle [h].
-                            0.0 starts at lunar dawn; 336.0 starts at
-                            nightfall, which is the stress scenario for
-                            testing storage sizing.
+    @param start_phase_hours  Where t=0 sits within the 708.7 h cycle [h].
+                            0.0 starts at lunar dawn; LUNAR_DAY_HOURS
+                            (354.35) starts at nightfall, which is the stress
+                            scenario for testing storage sizing.
 
 is_daylight(t_hours) -> bool
     Whether the outpost is in sunlight at time t.
@@ -45,10 +46,14 @@ is_daylight(t_hours) -> bool
     @return True during the lunar day, False during the night.
 
     @note The modulo folds absolute time into one cycle, so this stays correct
-        across the full 56-day run and beyond.
-    @note The comparison is STRICT: phase 336.0 is the first hour of night,
-        not the last hour of day. With a 1 h timestep the simulation lands
-        exactly on that boundary once per cycle, so the operator matters.
+        across the full 60-day run and beyond.
+    @note The comparison is STRICT: phase 354.35 is the first instant of
+        night, not the last of day. Because the synodic cycle is not a whole
+        number of hours, a 1 h timestep never lands exactly on the terminator
+        — it is sampled at whichever integer hour precedes it, so the
+        day/night split drifts by under an hour per cycle. Harmless at this
+        resolution, but worth knowing before anyone reads an exact 354 h
+        night off a plot.
 
 solar_irradiance_fraction(t_hours) -> float
     Fraction of peak solar flux available at time t.
@@ -69,7 +74,7 @@ class LunarEnvironment:
     """Pure model of the lunar day/night cycle."""
 
     def __init__(self, start_phase_hours: float = 0.0):
-        """Place t=0 at a chosen point in the 672 h cycle."""
+        """Place t=0 at a chosen point in the 708.7 h synodic cycle."""
         self.start_phase_hours = start_phase_hours
 
     def is_daylight(self, t_hours: float) -> bool:

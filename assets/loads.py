@@ -14,7 +14,7 @@ Everything on the outpost that consumes power, in four priority tiers:
     CommsArray       MEDIUM     2.5 kW for 8 h of every 24, 0.5 kW between.
     SciencePayload   LOW        6.0 kW for 12 h of every 24, 0 W between.
 
-Mean draw over the 56-day run is 15.67 kW, against 46.7 kW of daylight
+Mean draw over the 60-day run is 15.68 kW, against 46.75 kW of daylight
 generation and a 10 kW reactor at night. The resulting night deficit
 consumes roughly three quarters of the outpost's stored energy, which is
 what gives Step 7's controller something real to do.

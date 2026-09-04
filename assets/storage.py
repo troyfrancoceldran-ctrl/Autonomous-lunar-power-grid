@@ -14,12 +14,13 @@ The outpost's two storage assets, deliberately opposite in character:
 
     RegenerativeFuelCell   120 kg H2 = 4000 kWh chemical, 2200 kWh
                         deliverable, round-trip 0.385. Lossy and slow
-                        (12 kW ceiling), but carries the remaining 300 h
+                        (12 kW ceiling), but carries the remaining ~318 h
                         of darkness and still finishes with fuel to spare.
 
 That trade — efficiency against endurance — is the result this simulation
-exists to demonstrate. Sizing a battery to bridge a 336 h night alone would
-need ~1700 kWh, roughly 11 tonnes of cells landed on the Moon; hydrogen
+exists to demonstrate. Sizing a battery to bridge a 354.35 h night alone,
+even shed all the way down to a 5 kW critical load, would need ~1800 kWh —
+roughly 12 tonnes of cells landed on the Moon; hydrogen
 stores ~33 kWh/kg against lithium's ~0.15, so the RFC wins on mass by two
 orders of magnitude and pays for it in round-trip loss.
 
