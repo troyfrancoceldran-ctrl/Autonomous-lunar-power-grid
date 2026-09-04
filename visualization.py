@@ -121,8 +121,8 @@ def _legend(ax, ncol):
     frame is the only placement that cannot collide.
     """
     ax.legend(loc="lower left", bbox_to_anchor=(0.0, 1.0), ncol=ncol,
-              frameon=False, fontsize=8, labelcolor=INK_SOFT,
-              handlelength=1.6, columnspacing=1.6, borderaxespad=0.2)
+            frameon=False, fontsize=8, labelcolor=INK_SOFT,
+            handlelength=1.6, columnspacing=1.6, borderaxespad=0.2)
 
 
 SHORT_NAMES = {"Environmental Control and Life Support System": "ECLSS (life support)"}
@@ -277,7 +277,7 @@ def figure_two_signals(history, path=None):
     top.axhline(SOC_SHED_THRESHOLD, color=INK_SOFT, linewidth=1.0,
                 linestyle=(0, (4, 3)))
     _style(top, "The energy signal — what a conventional controller watches",
-           "state of charge  [-]", xlabel="", pad=30)
+        "state of charge  [-]", xlabel="", pad=30)
     _legend(top, 2)
     top.set_ylim(0, 1.05)
 

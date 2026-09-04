@@ -142,8 +142,8 @@ solar_elevation_fraction(t_hours) -> float
 VERIFICATION — expected values
 --------------------------------------------------------------------------------
     t [h]        phase       expected      meaning
-      0.0          0.00      0.000000      lunar dawn, sun on the horizon
-     88.5875      88.59      0.707107      mid-morning, quarter through day
+    0.0          0.00      0.000000      lunar dawn, sun on the horizon
+    88.5875      88.59      0.707107      mid-morning, quarter through day
     177.175      177.18      1.000000      local noon, sun at peak
     265.7625     265.76      0.707107      mid-afternoon
     354.0        354.00      0.003103      final hour before sunset

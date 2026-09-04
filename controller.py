@@ -217,22 +217,22 @@ twelve actions in twenty-four hours.
 
 TWO CAUSES
 
-  D-01a  The restore guard read a STALE signal.
+D-01a  The restore guard read a STALE signal.
 
-             tick N    shortfall 1500 -> shed Comms -> shortfall becomes 0
-             tick N+1  shortfall 0, soc 0.60 > 0.45 -> RESTORE Comms
-             tick N+2  shortfall 1500 again
+            tick N    shortfall 1500 -> shed Comms -> shortfall becomes 0
+            tick N+1  shortfall 0, soc 0.60 > 0.45 -> RESTORE Comms
+            tick N+2  shortfall 1500 again
 
-         The guard `and shortfall_w <= 0` was meant to prevent exactly this
-         and could not: a successful shed ZEROES the very signal the guard
-         tests. The cure was being read as the absence of the disease. No
-         amount of hysteresis on the ENERGY signal helps, because the energy
-         signal was reading a comfortable 0.60 throughout.
+        The guard `and shortfall_w <= 0` was meant to prevent exactly this
+        and could not: a successful shed ZEROES the very signal the guard
+        tests. The cure was being read as the absence of the disease. No
+        amount of hysteresis on the ENERGY signal helps, because the energy
+        signal was reading a comfortable 0.60 throughout.
 
-  D-01b  MIN_ACTION_DWELL_HOURS equalled TIME_STEP_HOURS, so the guard
-         `t - last >= min_dwell` was 1.0 >= 1.0 — true on the very next tick.
-         The dwell timer had been a no-op since Step 7; nothing noticed until
-         a branch bypassed hysteresis and left dwell as the only brake.
+D-01b  MIN_ACTION_DWELL_HOURS equalled TIME_STEP_HOURS, so the guard
+        `t - last >= min_dwell` was 1.0 >= 1.0 — true on the very next tick.
+        The dwell timer had been a no-op since Step 7; nothing noticed until
+        a branch bypassed hysteresis and left dwell as the only brake.
 
 THE FIX
     `shortfall_w` becomes a SIGNED `headroom_w`, measured at the start of the
@@ -263,12 +263,12 @@ WHY NOT JUST LENGTHEN THE DWELL
     Measured over the same outage, sweeping min_dwell_hours:
 
         dwell h   actions in outage   unserved kWh
-              1                  12           19.0
-              2                  12           26.0
-              3                  10           20.5
-              6                   6           14.0
-             12                   4            9.0
-             24                   2            9.0
+            1                  12           19.0
+            2                  12           26.0
+            3                  10           20.5
+            6                   6           14.0
+            12                   4            9.0
+            24                   2            9.0
 
     Chatter falls but never stops, unserved energy does not fall
     monotonically, and at 2 h it is WORSE than at 1 h because the restore
@@ -292,7 +292,7 @@ class ControlStrategy(ABC):
 
     @abstractmethod
     def update(self, t_hours: float, aggregate_soc: float, loads: list,
-               headroom_w: float):
+            headroom_w: float):
         """Decide shed/restore for this tick; returns the Load acted on, or None."""
         raise NotImplementedError
 
@@ -320,7 +320,7 @@ class AutonomousController(ControlStrategy):
         return t_hours - last_h >= self.min_dwell_hours
 
     def update(self, t_hours: float, aggregate_soc: float, loads: list,
-               headroom_w: float):
+            headroom_w: float):
         """Shed or restore at most one load this tick; returns it, or None."""
         # POWER emergency. The bus is already failing to serve what is
         # connected, so act now — dwell is deliberately not consulted.
