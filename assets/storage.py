@@ -387,20 +387,18 @@ class BatteryBank(PowerStorage):
         self.energy_wh = self.energy_wh - energy_out_wh
         self._clamp_energy()
         return float(delivered_power_w)
-    
-    # ==== W04 — START HERE (1 of 2) ==========================================
-    # Two @property members. available_discharge_power_w is now CONCRETE on
-    # PowerStorage and is inherited — do not write it here.
-    #
-    #   deliverable_energy_wh     spendable Wh above the floor, clamped at 0,
-    #                             * self.discharge_efficiency
-    #   deliverable_capacity_wh   (soc_max - soc_min) * capacity_wh
-    #                             * self.discharge_efficiency
-    #
-    # Do NOT delegate to super() — the base class raises NotImplementedError
-    # on purpose. Write the arithmetic.
-    # Targets when full: 180500.00 Wh / 180500.00 Wh, ceiling 50000 W at 1 h.
-    # =========================================================================
+
+    @property
+    def deliverable_energy_wh(self) -> float:
+        """Bus-side energy still available [Wh], after floor and losses."""
+        spendable_wh = self.energy_wh - self.soc_min * self.capacity_wh
+        return max(0.0, spendable_wh) * self.discharge_efficiency
+
+    @property
+    def deliverable_capacity_wh(self) -> float:
+        """Bus-side energy when full [Wh]; the aggregate-SoC denominator."""
+        return ((self.soc_max - self.soc_min) * self.capacity_wh
+                * self.discharge_efficiency)
 
     def _clamp_energy(self) -> None:
         """Keep stored energy inside its limits despite float drift."""
@@ -481,21 +479,21 @@ class RegenerativeFuelCell(PowerStorage):
         self._clamp_mass()
         return float(delivered_power_w)
 
-    # ==== W04 — START HERE (2 of 2) ==========================================
-    # The same two properties in the RFC's domain. Note the NAME: it is
-    # deliverable_energy_wh, not deliverable_energy_wh_per_kg — the interface
-    # asks for watt-hours, and the per-kg figure is a constant you multiply by.
-    #
-    #   deliverable_energy_wh     spendable KG above the floor, clamped at 0,
-    #                             * self.specific_energy_wh_per_kg
-    #                             * self.fuel_cell_efficiency
-    #   deliverable_capacity_wh   (soc_max - soc_min) * h2_capacity_kg
-    #                             * self.specific_energy_wh_per_kg
-    #                             * self.fuel_cell_efficiency
-    #
-    # fuel_cell_efficiency MULTIPLIES here; it DIVIDES in discharge() above.
-    # Targets when full: 2090000.00 Wh / 2090000.00 Wh, ceiling 12000 W at 1 h.
-    # =========================================================================
+    @property
+    def deliverable_energy_wh(self) -> float:
+        """Bus-side energy still available [Wh], after floor and losses."""
+        spendable_kg = self.h2_mass_kg - self.soc_min * self.h2_capacity_kg
+        return (max(0.0, spendable_kg)
+                * self.specific_energy_wh_per_kg
+                * self.fuel_cell_efficiency)
+
+    @property
+    def deliverable_capacity_wh(self) -> float:
+        """Bus-side energy when full [Wh]; the aggregate-SoC denominator."""
+        return ((self.soc_max - self.soc_min) * self.h2_capacity_kg
+                * self.specific_energy_wh_per_kg
+                * self.fuel_cell_efficiency)
+
 
     def _clamp_mass(self) -> None:
         """Keep stored mass inside its limits despite float drift."""
