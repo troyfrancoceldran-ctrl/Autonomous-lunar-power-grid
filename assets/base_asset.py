@@ -98,6 +98,58 @@ discharge(power_w, dt_hours) -> float
     @warning As with charge(), the shortfall between requested and delivered
         is what tells the engine a brownout occurred.
 
+deliverable_energy_wh -> float                                    [@property]
+    Energy this device can still put ON THE BUS [Wh].
+
+    @return Bus-side energy remaining, >= 0. Zero at the SoC floor.
+
+    @note BUS-SIDE, not device-side: the reserve floor is already subtracted
+        and the discharge loss is already applied. state_of_charge answers
+        "how full is the tank"; this answers "how many watt-hours will the
+        outpost actually receive", which is the only question a power balance
+        can use. For the RFC the two differ by a factor of 0.55.
+
+deliverable_capacity_wh -> float                                  [@property]
+    The same quantity with the device brim-full [Wh].
+
+    @return Bus-side energy between the SoC floor and ceiling, > 0.
+
+    @note This is a CONSTANT for a given device — it is the denominator of
+        the fleet's aggregate state of charge, not a live reading. It exists
+        so power_bus.py can compute
+
+            aggregate_soc = sum(deliverable_energy_wh)
+                        / sum(deliverable_capacity_wh)
+
+        which weights each device by the energy it can actually contribute.
+    @warning Do NOT let the engine average the devices' state_of_charge
+        values instead. Measured on this outpost, the battery holds 180.5 kWh
+        deliverable against the RFC's 2090 kWh — 7.9 % of the reserve. A mean
+        of SoCs gives a nearly-empty battery the same vote as the tanks
+        carrying the outpost through the night, so a full battery beside empty
+        tanks reads as half charged. Capacity weighting is what the
+        equivalent-SoC literature does, and it is why this property exists.
+
+available_discharge_power_w(dt_hours) -> float
+    Bus-side power ceiling this device can sustain for one whole timestep.
+
+    @param  dt_hours  Duration of the timestep [h].
+    @return min(power rating, deliverable_energy_wh / dt_hours) [W], >= 0.
+
+    @note A METHOD, not a property, because the answer depends on the step
+        length: 100 Wh of reserve is 100 W over an hour and 1000 W over six
+        minutes. A ceiling that ignored dt would report full nameplate power
+        for a device with minutes of energy left — precisely the case this
+        signal exists to catch.
+    @note Summed across the fleet this gives the outpost's POWER headroom,
+        which is a different failure mode from running out of energy and must
+        be reported separately. Measured case: battery at its floor with the
+        tanks at 95 % gives aggregate_soc = 0.872, which reads as healthy —
+        but the fleet can then deliver only the RFC's 12 kW, so an FSP outage
+        against a 19.5 kW night load leaves 7.5 kW unserved. Energy says fine;
+        power says brownout. Both are correct, which is why the controller
+        gets both.
+
 --------------------------------------------------------------------------------
 class Load(ABC)
 --------------------------------------------------------------------------------
@@ -161,6 +213,23 @@ class PowerStorage(ABC):
     @abstractmethod
     def discharge(self, power_w: float, dt_hours: float) -> float:
         """Deliver power for one timestep; returns power ACTUALLY delivered [W]."""
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def deliverable_energy_wh(self) -> float:
+        """Bus-side energy still available [Wh], after floor and losses."""
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def deliverable_capacity_wh(self) -> float:
+        """Bus-side energy when full [Wh]; the aggregate-SoC denominator."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def available_discharge_power_w(self, dt_hours: float) -> float:
+        """Bus-side power ceiling [W] sustainable for one whole timestep."""
         raise NotImplementedError
 
 

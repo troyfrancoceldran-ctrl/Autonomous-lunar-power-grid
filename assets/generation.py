@@ -36,7 +36,7 @@ Photovoltaic array; output tracks the environment's irradiance.
 @var sun_tracking    True = tracked array / Vertical Solar Array; False = fixed.
 
 __init__(name="PV Array", area_m2, efficiency, packing_factor, dust_derate,
-         sun_tracking)
+        sun_tracking)
     Construct a PV array from its nameplate specification.
 
     @param name            Identifier for logs and plots.
@@ -92,7 +92,7 @@ Kilopower-class fission reactor; constant output, indifferent to time.
 @var outage_duration_hours  Length of that outage [h].
 
 __init__(name="FSP Reactor", rated_power_w, availability, outage_start_hours,
-         outage_duration_hours)
+        outage_duration_hours)
     Construct a reactor from its nameplate specification.
 
     @param name                   Identifier for logs and plots.

@@ -57,19 +57,41 @@ A dispatch policy. The interface power_bus.py depends on.
 
 @var name  Human-readable identifier, used in logs.
 
-update(t_hours, soc, loads) -> Load | None
+update(t_hours, aggregate_soc, loads, shortfall_w) -> Load | None
     Decide shed/restore for this tick.
 
-    @param  t_hours  Simulation time [h] since t=0.
-    @param  soc      Overall storage reserve, a single fraction in [0, 1].
-    @param  loads    Every Load on the bus, shed or not.
+    @param  t_hours        Simulation time [h] since t=0.
+    @param  aggregate_soc  Fleet reserve as a single fraction in [0, 1].
+    @param  loads          Every Load on the bus, shed or not.
+    @param  shortfall_w    Power the bus could NOT serve this tick [W], >= 0.
     @return The Load acted on, or None if nothing changed.
 
-    @note The single soc float is deliberate. A strategy should not know
-        whether the outpost has one battery, two, or a fuel cell — defining
-        that aggregate is power_bus.py's job. That ignorance is what lets an
-        RL policy drop in later, and what lets this run on a microcontroller
-        reading one ADC channel.
+    @note Two scalars, not one, because energy and power fail differently.
+        aggregate_soc is the ENERGY signal — bus-side deliverable energy over
+        bus-side deliverable capacity, so a device counts for what it can
+        actually contribute. shortfall_w is the POWER signal — what the fleet
+        could not deliver right now, whatever its reserves.
+
+        Neither subsumes the other. Measured on this outpost: battery at its
+        floor with the tanks at 95 % gives aggregate_soc = 0.872, which reads
+        as comfortable, while the fleet can supply only the RFC's 12 kW — so
+        an FSP outage against a 19.5 kW night load leaves 7.5 kW unserved. A
+        controller watching energy alone sleeps through that. One watching
+        power alone cannot see the tanks draining, and sheds only once the
+        outpost is already failing.
+
+        This is defence in depth, chosen deliberately over a single elegant
+        signal, because the two failure modes are different events.
+
+    @note They are still SCALARS. A strategy must not know whether the outpost
+        has one battery, two, or a fuel cell — computing both aggregates is
+        power_bus.py's job. That ignorance is what lets an RL policy drop in
+        later, and what lets this run on a microcontroller reading two ADC
+        channels instead of one.
+    @note shortfall_w has NO default. Adding one would let a stale three-
+        argument call site keep compiling while silently reporting "no
+        brownout, ever" — the safety signal quietly disabled. Better a loud
+        TypeError at the first call.
 
 --------------------------------------------------------------------------------
 class AutonomousController(ControlStrategy)
@@ -128,6 +150,88 @@ update(t_hours, soc, loads) -> Load | None
         Science at 0.29, Comms at 0.25, Thermal at 0.20, nothing further.
         On recovery, nothing at 0.40 (dead band), then Thermal, Comms,
         Science in that order. ECLSS never sheds.
+
+
+================================================================================
+SPEC — W04, controller half.  Author: user.  Reviewer: JARVIS.
+================================================================================
+AutonomousController.update() takes the new power signal and gains a branch
+above the existing two. The ControlStrategy interface above is already
+changed; this brings the implementation into line with it.
+
+RENAME
+    The `soc` parameter becomes `aggregate_soc` throughout. It is no longer
+    "the battery's state of charge" — it is a capacity-weighted fleet
+    aggregate, and the old name invites a reader to assume otherwise.
+
+NEW PRECEDENCE — three branches, in this order
+
+    1.  POWER EMERGENCY   shortfall_w > 0
+            Shed the least important non-CRITICAL running load, IGNORING the
+            dwell timer.
+    2.  ENERGY LOW        aggregate_soc < shed_threshold
+            Exactly the existing shed branch, dwell still enforced.
+    3.  RECOVERY          aggregate_soc > restore_threshold
+                          AND shortfall_w <= 0
+            The existing restore branch, with the new second condition.
+    otherwise             return None
+
+    PSEUDOCODE
+        if shortfall_w > 0:
+            candidates = running, non-CRITICAL          # no dwell filter
+            if not candidates: return None
+            target = max(candidates, key=priority); target.shed = True
+            record the change time; return target
+
+        if aggregate_soc < self.shed_threshold:
+            ... unchanged ...
+
+        if aggregate_soc > self.restore_threshold and shortfall_w <= 0:
+            ... unchanged ...
+
+        return None
+
+    @warning Branch 3's `and shortfall_w <= 0` is NOT optional. Without it the
+        controller can restore a load while the bus is still failing to serve
+        the loads it already has — reserves may look full precisely because
+        the shed loads are not drawing from them. It would shed on the power
+        signal, restore on the energy signal, and oscillate every tick. The
+        two signals must agree before anything comes back.
+
+    @note Branch 1 bypasses dwell DELIBERATELY, and it is the one place in
+        this file that does. The dwell timer exists to stop chatter around a
+        threshold. An unserved-power event is not chatter — it is the outpost
+        already failing to meet demand, and an uncontrolled brownout drops
+        loads in whatever order physics chooses. Shedding deliberately, in
+        priority order, one per tick, is strictly better than waiting an hour
+        to be tidy. This is what under-frequency load shedding does on a
+        terrestrial grid, and for the same reason.
+    @note Still ONE action per call, in all three branches. If the shortfall
+        persists the next tick sheds the next load — the staircase again.
+    @note CRITICAL is excluded in branch 1 as in branch 2. ECLSS never sheds,
+        even in a brownout: the outpost losing life support to save the bus is
+        not a trade this controller is permitted to make. If the deficit
+        outlives every sheddable load, the correct behaviour is to report
+        unserved power and let the record show it.
+
+VERIFICATION
+    Construct four loads and drive update() directly.
+
+    a. shortfall_w = 0.0, aggregate_soc = 0.50   -> None (dead band, no
+                                                   emergency)
+    b. shortfall_w = 7500.0, aggregate_soc = 0.90 -> sheds Science Payload,
+                                                   despite a healthy reserve.
+                                                   THIS is the case the whole
+                                                   work order exists for.
+    c. immediately after (b), same tick time, shortfall still positive
+                                                -> sheds Comms Array, proving
+                                                   dwell was bypassed
+    d. shortfall_w = 0.0, aggregate_soc = 0.90, dwell elapsed
+                                                -> restores Comms Array
+    e. shortfall_w = 500.0, aggregate_soc = 0.90 -> must NOT restore; must
+                                                   shed instead
+    f. aggregate_soc = 0.29, shortfall_w = 0.0   -> unchanged staircase
+                                                   behaviour from Step 7
 """
 
 from abc import ABC, abstractmethod
@@ -144,7 +248,8 @@ class ControlStrategy(ABC):
     name: str
 
     @abstractmethod
-    def update(self, t_hours: float, soc: float, loads: list):
+    def update(self, t_hours: float, aggregate_soc: float, loads: list,
+               shortfall_w: float):
         """Decide shed/restore for this tick; returns the Load acted on, or None."""
         raise NotImplementedError
 

@@ -189,6 +189,121 @@ discharge(power_w, dt_hours) -> float
 _clamp_mass() -> None                                              [internal]
     Pin h2_mass_kg inside [soc_min, soc_max] * h2_capacity_kg against float
     drift. Not part of the PowerStorage contract.
+
+
+================================================================================
+SPEC — W04, storage half.  Author: user.  Reviewer: JARVIS.
+================================================================================
+Both classes gain the three members PowerStorage now declares. The abstract
+methods are already in base_asset.py, so until these exist NEITHER class can
+be instantiated — Python refuses to construct a class with unimplemented
+abstract members, which is the intended forcing function.
+
+THE ONE IDEA
+    state_of_charge answers "how full is the tank". These three answer "what
+    will the OUTPOST actually receive". Two adjustments separate them:
+
+        - subtract the reserve floor (soc_min); it is not spendable
+        - apply the DISCHARGE efficiency; it is lost on the way out
+
+    For the battery those cost 5 % and 5 %. For the RFC they cost 5 % and
+    45 %. That gap is the entire reason a mean-of-SoCs aggregate is wrong.
+
+--------------------------------------------------------------------------------
+deliverable_energy_wh -> float                                    [@property]
+--------------------------------------------------------------------------------
+    BatteryBank
+        spendable_wh = self.energy_wh - self.soc_min * self.capacity_wh
+        return max(0.0, spendable_wh) * self.discharge_efficiency
+
+    RegenerativeFuelCell
+        spendable_kg = self.h2_mass_kg - self.soc_min * self.h2_capacity_kg
+        return (max(0.0, spendable_kg)
+                * self.specific_energy_wh_per_kg
+                * self.fuel_cell_efficiency)
+
+    @warning Clamp the spendable amount at zero BEFORE multiplying. _clamp_*
+        keeps the stored quantity inside the band, but float drift can leave
+        it a hair under the floor, and a negative deliverable energy would
+        subtract from the fleet aggregate — an empty device making the
+        outpost look worse than empty.
+    @note discharge_efficiency / fuel_cell_efficiency MULTIPLIES here. It
+        divides in discharge(), which computes how much to take OUT of the
+        device to put a given amount on the bus. This asks the opposite
+        question — given what is in the device, how much reaches the bus — so
+        the operation inverts. Getting this backwards inflates the RFC's
+        contribution by 1/0.55^2 = 3.3x.
+
+--------------------------------------------------------------------------------
+deliverable_capacity_wh -> float                                  [@property]
+--------------------------------------------------------------------------------
+    The same expression with the device brim-full — replace the live quantity
+    with soc_max * capacity, so the spendable span becomes
+    (soc_max - soc_min) * capacity.
+
+    BatteryBank
+        return ((self.soc_max - self.soc_min) * self.capacity_wh
+                * self.discharge_efficiency)
+
+    RegenerativeFuelCell
+        return ((self.soc_max - self.soc_min) * self.h2_capacity_kg
+                * self.specific_energy_wh_per_kg
+                * self.fuel_cell_efficiency)
+
+    @note A CONSTANT for a given device — it reads only nameplate values,
+        never the live state. It is a property for symmetry with its sibling,
+        not because it varies.
+
+--------------------------------------------------------------------------------
+available_discharge_power_w(dt_hours) -> float
+--------------------------------------------------------------------------------
+    return min(self.max_discharge_power_w,
+               self.deliverable_energy_wh / dt_hours)
+
+    @warning Guard dt_hours <= 0 and return 0.0. A zero step would divide by
+        zero; a negative one would report a negative ceiling.
+    @note Both terms are already BUS-SIDE watts, so they are directly
+        comparable: max_discharge_power_w is the converter rating the bus
+        sees, and deliverable_energy_wh is post-efficiency. Mixing a
+        device-side rating with bus-side energy here is the easy mistake.
+    @note A method rather than a property because the answer depends on the
+        step length — 100 Wh is 100 W over an hour and 1000 W over six
+        minutes.
+
+--------------------------------------------------------------------------------
+VERIFICATION — expected values at config defaults, dt = 1.0 h
+--------------------------------------------------------------------------------
+    Both devices full (SoC 1.00):
+
+        device    deliverable_energy_wh   deliverable_capacity_wh   power [W]
+        Battery              180500.00                 180500.00     50000.00
+        RFC                 2090000.00                2090000.00     12000.00
+
+        fleet aggregate_soc = 2270500 / 2270500 = 1.000
+        fleet power ceiling = 62000 W
+
+    Battery emptied to its floor (SoC 0.05), RFC at 0.95:
+
+        device    deliverable_energy_wh   power [W]
+        Battery                    0.00         0.00
+        RFC                  1980000.00     12000.00
+
+        fleet aggregate_soc = 1980000 / 2270500 = 0.872
+        fleet power ceiling = 12000 W
+
+    That second row is the whole argument for W04. The energy signal reads a
+    comfortable 0.872 while the fleet can supply only 12 kW — so an FSP
+    outage against a 19.5 kW night load leaves 7.5 kW unserved. One number
+    says healthy, the other says brownout, and both are right.
+
+    Also assert:
+        - deliverable_energy_wh == 0.0 exactly at soc_min, never negative
+        - deliverable_energy_wh <= deliverable_capacity_wh always
+        - battery share of fleet capacity = 180500 / 2270500 = 7.95 %,
+          which is why a mean of the two SoC values must not be used
+        - available_discharge_power_w(1.0) == 0.0 when the device is empty
+        - halving dt doubles the energy-limited ceiling but never exceeds
+          max_discharge_power_w
 """
 
 from assets.base_asset import PowerStorage
