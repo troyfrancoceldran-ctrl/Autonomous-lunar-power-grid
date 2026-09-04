@@ -28,7 +28,7 @@ Authors are Troy Celdran with JARVIS (Claude Opus 5) as co-author.
       - F-04 PV dust derate and an explicit tracking flag
       - F-03 scripted reactor outage window
       - the two-signal control contract: capacity-weighted `aggregate_soc` + `shortfall_w`
-- [ ] Step 8 — `power_bus.py`: wire generation + loads + storage + controller together per tick
+- [x] Step 8 — `power_bus.py`: per-tick measure/decide/dispatch/record (Claude). Exposed defect D-01 in the W04 control contract — the shortfall signal was stale by construction; replaced with a signed `headroom_w` measured at the start of each tick. `MIN_ACTION_DWELL_HOURS` 1.0 -> 3.0, which had been a no-op since Step 7.
 - [ ] Step 9 — `simulation_engine.py`: 60-day time-marching loop + history log
 - [ ] Step 10 — `metrics.py` + `visualization.py`: KPIs and plots
 - [ ] Step 11 — `tests/`: pytest coverage per module
