@@ -27,11 +27,11 @@ Concrete implementations live in:
 
 
 ================================================================================
- API
+API
 ================================================================================
 
 --------------------------------------------------------------------------------
- class PowerSource(ABC)
+class PowerSource(ABC)
 --------------------------------------------------------------------------------
 Anything that can inject power onto the bus: the PV array, the FSP reactor, or
 an RFC operating in fuel-cell/discharge mode.
@@ -109,7 +109,7 @@ base so the controller has one consistent API across all load types.
 @var priority  LoadPriority tier. Lower number = shed last, restored first.
 @var shed      True when the controller has disconnected this load.
 
- demand(t_hours) -> float
+demand(t_hours) -> float
     Power this load WANTS to draw, ignoring shed state.
 
     @param  t_hours  Simulation time [h] since t=0.
