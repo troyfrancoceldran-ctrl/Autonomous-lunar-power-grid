@@ -172,7 +172,7 @@ NEW PRECEDENCE — three branches, in this order
     2.  ENERGY LOW        aggregate_soc < shed_threshold
             Exactly the existing shed branch, dwell still enforced.
     3.  RECOVERY          aggregate_soc > restore_threshold
-                          AND shortfall_w <= 0
+                        AND shortfall_w <= 0
             The existing restore branch, with the new second condition.
     otherwise             return None
 
@@ -218,20 +218,20 @@ VERIFICATION
     Construct four loads and drive update() directly.
 
     a. shortfall_w = 0.0, aggregate_soc = 0.50   -> None (dead band, no
-                                                   emergency)
+                                                emergency)
     b. shortfall_w = 7500.0, aggregate_soc = 0.90 -> sheds Science Payload,
-                                                   despite a healthy reserve.
-                                                   THIS is the case the whole
-                                                   work order exists for.
+                                                despite a healthy reserve.
+                                                THIS is the case the whole
+                                                work order exists for.
     c. immediately after (b), same tick time, shortfall still positive
                                                 -> sheds Comms Array, proving
-                                                   dwell was bypassed
+                                                dwell was bypassed
     d. shortfall_w = 0.0, aggregate_soc = 0.90, dwell elapsed
                                                 -> restores Comms Array
     e. shortfall_w = 500.0, aggregate_soc = 0.90 -> must NOT restore; must
-                                                   shed instead
+                                                shed instead
     f. aggregate_soc = 0.29, shortfall_w = 0.0   -> unchanged staircase
-                                                   behaviour from Step 7
+                                                behaviour from Step 7
 """
 
 from abc import ABC, abstractmethod
@@ -249,7 +249,7 @@ class ControlStrategy(ABC):
 
     @abstractmethod
     def update(self, t_hours: float, aggregate_soc: float, loads: list,
-               shortfall_w: float):
+            shortfall_w: float):
         """Decide shed/restore for this tick; returns the Load acted on, or None."""
         raise NotImplementedError
 
@@ -275,6 +275,22 @@ class AutonomousController(ControlStrategy):
         if last_h is None:
             return True
         return t_hours - last_h >= self.min_dwell_hours
+
+    # ==== W04 — START HERE (3 of 3) ==========================================
+    # Three edits to update() below, then delete this banner:
+    #
+    #   1. signature: (self, t_hours, aggregate_soc, loads, shortfall_w)
+    #      — rename soc -> aggregate_soc in both existing branches too
+    #   2. NEW first branch, above everything:  if shortfall_w > 0:
+    #      shed the least important non-CRITICAL running load, IGNORING dwell
+    #   3. restore branch gains a second condition:
+    #      if aggregate_soc > self.restore_threshold and shortfall_w <= 0:
+    #
+    # Edit 3 is not optional — without it the controller sheds on the power
+    # signal, restores on the energy signal, and oscillates every tick.
+    # Full spec: the "SPEC — W04, controller half" section in the module
+    # docstring above.
+    # =========================================================================
 
     def update(self, t_hours: float, soc: float, loads: list):
         """Shed or restore at most one load this tick; returns it, or None."""

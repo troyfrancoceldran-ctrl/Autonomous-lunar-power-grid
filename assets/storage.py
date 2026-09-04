@@ -258,7 +258,7 @@ deliverable_capacity_wh -> float                                  [@property]
 available_discharge_power_w(dt_hours) -> float
 --------------------------------------------------------------------------------
     return min(self.max_discharge_power_w,
-               self.deliverable_energy_wh / dt_hours)
+            self.deliverable_energy_wh / dt_hours)
 
     @warning Guard dt_hours <= 0 and return 0.0. A zero step would divide by
         zero; a negative one would report a negative ceiling.
@@ -300,10 +300,10 @@ VERIFICATION — expected values at config defaults, dt = 1.0 h
         - deliverable_energy_wh == 0.0 exactly at soc_min, never negative
         - deliverable_energy_wh <= deliverable_capacity_wh always
         - battery share of fleet capacity = 180500 / 2270500 = 7.95 %,
-          which is why a mean of the two SoC values must not be used
+        which is why a mean of the two SoC values must not be used
         - available_discharge_power_w(1.0) == 0.0 when the device is empty
         - halving dt doubles the energy-limited ceiling but never exceeds
-          max_discharge_power_w
+        max_discharge_power_w
 """
 
 from assets.base_asset import PowerStorage
@@ -390,6 +390,18 @@ class BatteryBank(PowerStorage):
         self._clamp_energy()
         return float(delivered_power_w)
 
+    # ==== W04 — START HERE (1 of 3) ==========================================
+    # Add three members below, then delete this banner:
+    #
+    #     @property deliverable_energy_wh    -> spendable Wh * discharge_eff
+    #     @property deliverable_capacity_wh  -> (soc_max - soc_min) * cap * eff
+    #     def       available_discharge_power_w(dt_hours)
+    #
+    # Full spec, traps and expected values: the "SPEC — W04, storage half"
+    # section in this file's module docstring above.
+    # Targets at dt = 1.0 h, full:  180500.00 Wh  /  180500.00 Wh  /  50000 W
+    # =========================================================================
+
     def _clamp_energy(self) -> None:
         """Keep stored energy inside its limits despite float drift."""
         floor_wh = self.soc_min * self.capacity_wh
@@ -468,6 +480,18 @@ class RegenerativeFuelCell(PowerStorage):
         self.h2_mass_kg = self.h2_mass_kg - h2_used_kg
         self._clamp_mass()
         return float(delivered_power_w)
+
+    # ==== W04 — START HERE (2 of 3) ==========================================
+    # The same three members, in the RFC's domain: spendable KG first, then
+    # * specific_energy_wh_per_kg * fuel_cell_efficiency to reach watt-hours.
+    #
+    # Two things differ from the battery:
+    #   - the state variable is h2_mass_kg, not energy_wh
+    #   - the outbound efficiency is fuel_cell_efficiency (0.55), and it
+    #     MULTIPLIES here while it DIVIDES in discharge() above
+    #
+    # Targets at dt = 1.0 h, full:  2090000.00 Wh / 2090000.00 Wh / 12000 W
+    # =========================================================================
 
     def _clamp_mass(self) -> None:
         """Keep stored mass inside its limits despite float drift."""
