@@ -255,20 +255,18 @@ deliverable_capacity_wh -> float                                  [@property]
         not because it varies.
 
 --------------------------------------------------------------------------------
-available_discharge_power_w(dt_hours) -> float
+available_discharge_power_w(dt_hours) -> float               [NOT YOURS TO WRITE]
 --------------------------------------------------------------------------------
-    return min(self.max_discharge_power_w,
-            self.deliverable_energy_wh / dt_hours)
+    Inherited from PowerStorage, which now implements it CONCRETELY as
 
-    @warning Guard dt_hours <= 0 and return 0.0. A zero step would divide by
-        zero; a negative one would report a negative ceiling.
-    @note Both terms are already BUS-SIDE watts, so they are directly
-        comparable: max_discharge_power_w is the converter rating the bus
-        sees, and deliverable_energy_wh is post-efficiency. Mixing a
-        device-side rating with bus-side energy here is the easy mistake.
-    @note A method rather than a property because the answer depends on the
-        step length — 100 Wh is 100 W over an hour and 1000 W over six
-        minutes.
+        min(self.max_discharge_power_w, self.deliverable_energy_wh / dt_hours)
+
+    guarded against dt_hours <= 0. Both operands are interface members, so the
+    expression is identical for every storage device that will ever exist and
+    belongs in the base class — the same reasoning as Load.effective_demand().
+
+    Neither class here should define it. Supplying deliverable_energy_wh and
+    the nameplate max_discharge_power_w they already store is enough.
 
 --------------------------------------------------------------------------------
 VERIFICATION — expected values at config defaults, dt = 1.0 h
@@ -389,17 +387,19 @@ class BatteryBank(PowerStorage):
         self.energy_wh = self.energy_wh - energy_out_wh
         self._clamp_energy()
         return float(delivered_power_w)
-
-    # ==== W04 — START HERE (1 of 3) ==========================================
-    # Add three members below, then delete this banner:
+    
+    # ==== W04 — START HERE (1 of 2) ==========================================
+    # Two @property members. available_discharge_power_w is now CONCRETE on
+    # PowerStorage and is inherited — do not write it here.
     #
-    #     @property deliverable_energy_wh    -> spendable Wh * discharge_eff
-    #     @property deliverable_capacity_wh  -> (soc_max - soc_min) * cap * eff
-    #     def       available_discharge_power_w(dt_hours)
+    #   deliverable_energy_wh     spendable Wh above the floor, clamped at 0,
+    #                             * self.discharge_efficiency
+    #   deliverable_capacity_wh   (soc_max - soc_min) * capacity_wh
+    #                             * self.discharge_efficiency
     #
-    # Full spec, traps and expected values: the "SPEC — W04, storage half"
-    # section in this file's module docstring above.
-    # Targets at dt = 1.0 h, full:  180500.00 Wh  /  180500.00 Wh  /  50000 W
+    # Do NOT delegate to super() — the base class raises NotImplementedError
+    # on purpose. Write the arithmetic.
+    # Targets when full: 180500.00 Wh / 180500.00 Wh, ceiling 50000 W at 1 h.
     # =========================================================================
 
     def _clamp_energy(self) -> None:
@@ -481,16 +481,20 @@ class RegenerativeFuelCell(PowerStorage):
         self._clamp_mass()
         return float(delivered_power_w)
 
-    # ==== W04 — START HERE (2 of 3) ==========================================
-    # The same three members, in the RFC's domain: spendable KG first, then
-    # * specific_energy_wh_per_kg * fuel_cell_efficiency to reach watt-hours.
+    # ==== W04 — START HERE (2 of 2) ==========================================
+    # The same two properties in the RFC's domain. Note the NAME: it is
+    # deliverable_energy_wh, not deliverable_energy_wh_per_kg — the interface
+    # asks for watt-hours, and the per-kg figure is a constant you multiply by.
     #
-    # Two things differ from the battery:
-    #   - the state variable is h2_mass_kg, not energy_wh
-    #   - the outbound efficiency is fuel_cell_efficiency (0.55), and it
-    #     MULTIPLIES here while it DIVIDES in discharge() above
+    #   deliverable_energy_wh     spendable KG above the floor, clamped at 0,
+    #                             * self.specific_energy_wh_per_kg
+    #                             * self.fuel_cell_efficiency
+    #   deliverable_capacity_wh   (soc_max - soc_min) * h2_capacity_kg
+    #                             * self.specific_energy_wh_per_kg
+    #                             * self.fuel_cell_efficiency
     #
-    # Targets at dt = 1.0 h, full:  2090000.00 Wh / 2090000.00 Wh / 12000 W
+    # fuel_cell_efficiency MULTIPLIES here; it DIVIDES in discharge() above.
+    # Targets when full: 2090000.00 Wh / 2090000.00 Wh, ceiling 12000 W at 1 h.
     # =========================================================================
 
     def _clamp_mass(self) -> None:

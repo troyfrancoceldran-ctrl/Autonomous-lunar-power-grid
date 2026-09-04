@@ -130,17 +130,27 @@ deliverable_capacity_wh -> float                                  [@property]
         tanks reads as half charged. Capacity weighting is what the
         equivalent-SoC literature does, and it is why this property exists.
 
-available_discharge_power_w(dt_hours) -> float
+available_discharge_power_w(dt_hours) -> float                    [CONCRETE]
     Bus-side power ceiling this device can sustain for one whole timestep.
 
-    @param  dt_hours  Duration of the timestep [h].
-    @return min(power rating, deliverable_energy_wh / dt_hours) [W], >= 0.
+    @param  dt_hours  Duration of the timestep [h]; <= 0 returns 0.0.
+    @return min(max_discharge_power_w, deliverable_energy_wh / dt_hours) [W].
 
+    @note NOT abstract. Both operands are already interface members, so the
+        expression is identical for every storage device that will ever
+        exist — implemented once here rather than in each subclass, each free
+        to get it wrong. Same reasoning as Load.effective_demand() below.
+        Subclasses need only supply max_discharge_power_w (a nameplate value
+        they all store anyway) and deliverable_energy_wh.
     @note A METHOD, not a property, because the answer depends on the step
         length: 100 Wh of reserve is 100 W over an hour and 1000 W over six
         minutes. A ceiling that ignored dt would report full nameplate power
         for a device with minutes of energy left — precisely the case this
         signal exists to catch.
+    @note Both operands must be BUS-SIDE for the min() to be meaningful:
+        max_discharge_power_w is the converter rating the bus sees, and
+        deliverable_energy_wh is already post-efficiency. Mixing a
+        device-side rating with bus-side energy here is the easy mistake.
     @note Summed across the fleet this gives the outpost's POWER headroom,
         which is a different failure mode from running out of energy and must
         be reported separately. Measured case: battery at its floor with the
@@ -227,10 +237,12 @@ class PowerStorage(ABC):
         """Bus-side energy when full [Wh]; the aggregate-SoC denominator."""
         raise NotImplementedError
 
-    @abstractmethod
     def available_discharge_power_w(self, dt_hours: float) -> float:
         """Bus-side power ceiling [W] sustainable for one whole timestep."""
-        raise NotImplementedError
+        if dt_hours <= 0:
+            return 0.0
+        return min(self.max_discharge_power_w,
+                   self.deliverable_energy_wh / dt_hours)
 
 
 class Load(ABC):
