@@ -236,7 +236,7 @@ class PowerBus:
     def headroom_w(self, t_hours: float, dt_hours: float) -> float:
         """Signed power margin [W]: generation + fleet ceiling - demand."""
         generation_w = sum(source.available_power(t_hours, self.environment)
-                           for source in self.sources)
+                        for source in self.sources)
         demand_w = sum(load.effective_demand(t_hours) for load in self.loads)
         return generation_w + self.storage_power_ceiling_w(dt_hours) - demand_w
 
@@ -266,7 +266,7 @@ class PowerBus:
         soc = self.aggregate_soc
         ceiling_w = self.storage_power_ceiling_w(dt_hours)
         generation_w = sum(source.available_power(t_hours, self.environment)
-                           for source in self.sources)
+                        for source in self.sources)
         connected_w = sum(load.effective_demand(t_hours) for load in self.loads)
         headroom_w = generation_w + ceiling_w - connected_w
 

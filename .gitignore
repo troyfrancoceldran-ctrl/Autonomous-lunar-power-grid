@@ -7,3 +7,5 @@ data/output_logs/*.csv
 data/output_logs/*.parquet
 .pytest_cache/
 *.egg-info/
+data/history_*.csv
+data/history_*.json
