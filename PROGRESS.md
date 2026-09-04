@@ -35,6 +35,21 @@ Authors are Troy Celdran with JARVIS (Claude Opus 5) as co-author.
 - [x] Step 12 (part 1) — README rewritten around the result, `--report`/`--figures` flags wired into `main.py`, MIT LICENSE, figures committed to `docs/figures/`, pre-publication audit run (Claude)
 - [ ] Step 12 (part 2) — push to a new public GitHub repo. NEEDS the user's explicit go-ahead, a repo name, and a decision on the commit-author email (see below).
 
+## Next cycle — week of 2026-09-08
+Two upgrades, taken together because the second is more useful once the first
+exists. Both are in the README roadmap.
+- [ ] **Electrical topology** — bus voltage, per-feeder currents, converter
+      ratings distinct from device efficiencies, a protection scheme. This is
+      what turns a power balance into something buildable, and what would make
+      an SLD a real statement about voltage levels rather than an illustration.
+- [ ] **Client-side model** — port the simulation core to JavaScript so it runs
+      in a browser instead of replaying an exported history. Most of the work
+      is already done: the controller is plain arithmetic with no numpy because
+      it was written to port to a microcontroller, and that same discipline
+      makes it port to JS.
+Further out, and dependent on both: an operable SLD, then a hardware render.
+The successor is expected to be a NEW repo with its own name.
+
 ## Agreed sequence from here (2026-09-04)
 1. **User** writes Step 11 against `tests/INVARIANTS.md`.
 2. **Together** — full test run and review before anything is published.

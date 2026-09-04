@@ -243,6 +243,61 @@ A full audit against NASA and IEEE sources — six findings, all closed — is i
 
 ---
 
+## Roadmap
+
+The simplifications above are not a permanent boundary — they are the order of
+work. Each item below exists because the one after it cannot be honest without
+it.
+
+### Next: electrical topology
+
+Give the model a bus voltage and per-feeder currents, converter ratings
+distinct from device efficiencies, and enough of a protection scheme to say
+what each breaker is actually rated for.
+
+This is the step that turns a power balance into something buildable. It is
+also what would make a single-line diagram *real* rather than illustrative — an
+SLD is properly a statement about voltage levels and protection, not just about
+what connects to what. Every downstream ambition needs it first.
+
+### Next: the model running client-side
+
+Port the simulation core to JavaScript so it runs in a browser rather than
+replaying an exported history.
+
+Most of the work is already done by accident of an earlier constraint: the
+controller is plain arithmetic with no numpy, written that way so it would port
+to a microcontroller. The same discipline makes it port to JS almost line for
+line, and the environment, storage and load models are equally small. It is a
+translation, not a rewrite.
+
+### Then: an operable single-line diagram
+
+Not a replay — a diagram you can *operate*. Change the array size, move the
+outage, open a breaker by hand, and watch the grid respond, because the model
+is running underneath rather than being played back.
+
+### Eventually: a hardware render
+
+A physical representation of the outpost that reflects the specified system
+rather than an artist's impression. This needs the topology work above: you
+cannot render hardware you have not specified.
+
+### Open regardless
+
+- **The controller has never run on a microcontroller.** It was written to
+  port — single decision function, plain arithmetic, no dependencies — but the
+  target board is unchosen and the claim is untested. An ESP32-class part is
+  assumed plausible, not confirmed.
+- **Curtailment is 27 % and unaddressed.** The obvious lever is a larger
+  electrolyser; whether the mass penalty is worth it is a real trade study
+  nobody has run.
+- **The restore fit test looks only at present demand**, so a duty-cycled load
+  can be restored during its idle window. Publishing a nameplate maximum on the
+  `Load` interface would close it without resorting to forecasting.
+
+---
+
 ## Testing
 
 188 tests in about 0.4 seconds. They are organised by **failure mode**, not by
