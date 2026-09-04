@@ -29,7 +29,7 @@ def conservation_error(record):
 # =============================================================================
 
 @pytest.mark.parametrize("run", ["nominal_history", "outage_history",
-                                 "fine_history"])
+                                "fine_history"])
 def test_conservation_identity_holds_every_tick(request, run):
     history = request.getfixturevalue(run)
     for record in history:
@@ -123,12 +123,12 @@ def test_aggregate_soc_is_capacity_weighted_not_a_mean(outpost):
 
 def test_storage_ceiling_is_the_sum_of_device_ceilings(outpost):
     expected = sum(d.available_discharge_power_w(TIME_STEP_HOURS)
-                   for d in outpost.storage)
+                for d in outpost.storage)
     assert outpost.storage_power_ceiling_w(TIME_STEP_HOURS) == pytest.approx(expected)
 
 
 def test_a_bus_with_no_storage_reports_zero_rather_than_dividing(env, loads,
-                                                                 controller):
+                                                                controller):
     """sum of an empty capacity is 0; the guard must not divide by it."""
     bus = PowerBus([], [], loads, controller, env)
     assert bus.aggregate_soc == 0.0

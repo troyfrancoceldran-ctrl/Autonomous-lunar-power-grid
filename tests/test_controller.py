@@ -81,8 +81,8 @@ def test_dead_band_is_idle(controller, loads):
 def test_shed_order_is_least_important_first(controller, loads):
     """LoadPriority inverts: shedding takes max() of the priority value."""
     order = [name_of(controller.update(float(t * MIN_ACTION_DWELL_HOURS),
-                                       0.20, loads, PLENTY))
-             for t in range(4)]
+                                    0.20, loads, PLENTY))
+            for t in range(4)]
     assert order == [SCIENCE_NAME, COMMS_NAME, THERMAL_NAME, None]
 
 
@@ -92,8 +92,8 @@ def test_restore_order_is_most_important_first(controller, loads):
         controller.update(float(t * MIN_ACTION_DWELL_HOURS), 0.20, loads, PLENTY)
     base = 100.0
     order = [name_of(controller.update(base + t * MIN_ACTION_DWELL_HOURS,
-                                       0.90, loads, PLENTY))
-             for t in range(4)]
+                                    0.90, loads, PLENTY))
+            for t in range(4)]
     assert order == [THERMAL_NAME, COMMS_NAME, SCIENCE_NAME, None]
 
 
@@ -112,7 +112,7 @@ def test_power_branch_bypasses_dwell(controller, loads):
     worse than shedding deliberately in priority order."""
     same_tick = 10.0
     order = [name_of(controller.update(same_tick, 0.90, loads, -7500.0))
-             for _ in range(3)]
+            for _ in range(3)]
     assert order == [SCIENCE_NAME, COMMS_NAME, THERMAL_NAME]
 
 
@@ -128,7 +128,7 @@ def test_energy_branch_respects_dwell(controller, loads):
     assert name_of(controller.update(0.0, 0.20, loads, PLENTY)) == SCIENCE_NAME
     assert controller.update(TIME_STEP_HOURS, 0.90, loads, PLENTY) is NONE_ACTED
     assert name_of(controller.update(MIN_ACTION_DWELL_HOURS, 0.90,
-                                     loads, PLENTY)) == SCIENCE_NAME
+                                    loads, PLENTY)) == SCIENCE_NAME
 
 
 def test_one_action_per_call(controller, loads):
@@ -177,7 +177,7 @@ def test_restore_requires_the_load_to_actually_fit(controller, loads):
 def test_persistent_shortfall_never_oscillates(controller, loads):
     """Six consecutive ticks: sheds down to CRITICAL and then stops."""
     actions = [name_of(controller.update(float(t), 0.90, loads, -500.0))
-               for t in range(6)]
+            for t in range(6)]
     assert actions[:3] == [SCIENCE_NAME, COMMS_NAME, THERMAL_NAME]
     assert actions[3:] == [None, None, None]
     assert sum(1 for load in loads if load.shed) == 3

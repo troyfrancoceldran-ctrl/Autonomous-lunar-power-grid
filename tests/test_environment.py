@@ -53,7 +53,7 @@ def test_night_is_half_the_synodic_cycle(env):
     step = LUNAR_CYCLE_HOURS / n
     dark = sum(1 for i in range(n) if not env.is_daylight(i * step))
     assert dark / n == pytest.approx(LUNAR_NIGHT_HOURS / LUNAR_CYCLE_HOURS,
-                                     abs=1e-3)
+                                    abs=1e-3)
 
 
 def test_elevation_reaches_both_extremes(env):

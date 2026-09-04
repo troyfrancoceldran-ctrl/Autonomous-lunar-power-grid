@@ -14,9 +14,12 @@ same engine run a different outpost without being edited.
 That makes this file the outpost's parts list, and build_outpost() the place
 to change the hardware.
 
-    python main.py                  nominal 60-day run
-    python main.py --outage 500     with a 24 h reactor outage from hour 500
-    python main.py --export         also write data/history.{csv,json}
+    python main.py                     nominal 60-day run
+    python main.py --outage 500        24 h reactor outage from hour 500
+    python main.py --report            full KPI report instead of the summary
+    python main.py --figures           render the four figures to data/figures/
+    python main.py --export            write data/history_*.{csv,json}
+    python main.py --outage 500 --report --figures --export      all of it
 
 @note MERIT ORDER IS SET HERE, by the order of the storage list. Battery
     first, RFC second: cycle the efficient device (round trip 0.9025) and
@@ -49,7 +52,13 @@ run_scenario(name, outage_start_hours=None, export=False) -> SimulationEngine
     @param  name                Label for the console report.
     @param  outage_start_hours  Passed through to build_outpost().
     @param  export              Write data/history_<name>.{csv,json} as well.
+    @param  report              Print the full metrics.py KPI report.
+    @param  figures             Render the four figures into data/figures/.
     @return The engine, so a caller can reach .history for further analysis.
+
+    @note visualization is imported INSIDE the branch, not at module level.
+        It pulls in matplotlib, which costs seconds on a cold font cache, and
+        a run that only wants numbers should not pay for a plotting library.
 
     @note Builds a FRESH outpost every time. Storage devices and shed flags
         are stateful, so reusing a bus across scenarios would carry the first
@@ -91,7 +100,8 @@ def build_outpost(environment, outage_start_hours=None) -> PowerBus:
     )
 
 
-def run_scenario(name: str, outage_start_hours=None, export: bool = False):
+def run_scenario(name: str, outage_start_hours=None, export: bool = False,
+                report: bool = False, figures: bool = False):
     """Build a fresh outpost, run it, print a summary; returns the engine."""
     environment = LunarEnvironment()
     engine = SimulationEngine(build_outpost(environment, outage_start_hours))
@@ -108,11 +118,23 @@ def run_scenario(name: str, outage_start_hours=None, export: bool = False):
     print(f"  {'min headroom':<20}{s['min_headroom_w'] / 1000:>12.2f} kW")
     print(f"  {'controller actions':<20}{s['actions']:>12}")
 
+    slug = "".join(ch if ch.isalnum() else "_" for ch in name.lower()).strip("_")
+
     if export:
-        slug = "".join(ch if ch.isalnum() else "_" for ch in name.lower()).strip("_")
         engine.to_csv(f"data/history_{slug}.csv")
         engine.to_json(f"data/history_{slug}.json")
         print(f"  {'exported':<20}  data/history_{slug}.csv and .json")
+
+    if report:
+        import metrics
+        print()
+        print(metrics.report(engine.history))
+
+    if figures:
+        import visualization           # imports matplotlib; deferred on purpose
+        paths = visualization.make_all(engine.history, f"data/figures/{slug}")
+        print(f"  {'figures':<20}  " + ", ".join(paths))
+
     return engine
 
 
@@ -121,9 +143,14 @@ if __name__ == "__main__":
     parser.add_argument("--outage", type=float, default=None, metavar="HOURS",
                         help="start a scripted FSP outage at this hour")
     parser.add_argument("--export", action="store_true",
-                        help="write the run history to data/")
+                        help="write the run history to data/ as CSV and JSON")
+    parser.add_argument("--report", action="store_true",
+                        help="print the full KPI report from metrics.py")
+    parser.add_argument("--figures", action="store_true",
+                        help="render the four figures into data/figures/")
     args = parser.parse_args()
 
     label = ("nominal" if args.outage is None
             else f"FSP outage at t={args.outage:.0f} h")
-    run_scenario(label, outage_start_hours=args.outage, export=args.export)
+    run_scenario(label, outage_start_hours=args.outage, export=args.export,
+                report=args.report, figures=args.figures)

@@ -71,7 +71,7 @@ def test_fsp_varies_only_when_an_outage_is_configured(env):
     assert len({steady.available_power(t, env) for t in range(0, 1440)}) == 1
 
     interrupted = FissionSurfacePower(outage_start_hours=500.0,
-                                      outage_duration_hours=24.0)
+                                    outage_duration_hours=24.0)
     assert len({interrupted.available_power(t, env) for t in range(0, 1440)}) == 2
 
 

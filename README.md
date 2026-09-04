@@ -1,47 +1,321 @@
 # Lunar Microgrid Simulation
 
-A time-series simulation of an autonomous power microgrid for a lunar outpost —
-photovoltaic generation, battery + regenerative fuel cell (RFC) storage, and an
-autonomous load-shedding controller, modeled hour-by-hour across the 14-day
-lunar day / 14-day lunar night cycle.
+An hour-by-hour simulation of the power system for an autonomous lunar outpost:
+a photovoltaic array, a fission reactor, a battery, a regenerative fuel cell,
+four loads, and a controller that decides what to switch off when the reserves
+run low.
 
-This project doubles as a portfolio piece for the Power + AI systems track
-(grid analytics / digital twin / battery management roles).
+It runs 60 days — just over two full lunar cycles — and answers one question
+that a single number cannot: **when this outpost fails, does it fail because it
+ran out of energy, or because it ran out of power?**
 
-## Status
+---
 
-Build is happening incrementally, step by step. See `PROGRESS.md` for what's
-done and what's next.
+## The result
 
-## Project layout
+A conventional microgrid controller watches one signal: state of charge. Run a
+reactor outage through this model in deep lunar night and that signal reports
+everything is fine while the outpost is already browning out.
 
 ```
-config.py                # Simulation constants: time step, lunar cycle length, thresholds
-environment.py            # LunarEnvironment: solar flux / day-night phase over time
-assets/
-    base_asset.py         # Abstract PowerSource, PowerStorage, Load interfaces
-    generation.py         # PVArray, FissionSurfacePower
-    storage.py             # BatteryBank (SoC), RegenerativeFuelCell (H2/O2 mass)
-    loads.py               # ECLSS, ThermalControl, CommsArray, SciencePayload
-controller.py              # AutonomousController — priority-based load shedding + hysteresis
-power_bus.py                # Energy balance each timestep; dispatches storage & controller
-simulation_engine.py        # Fixed-timestep time-marching loop, history logging
-metrics.py                  # KPIs: shed events, SoC excursions, reactant margin, uptime
-visualization.py             # Plots
-main.py                       # Entry point
-tests/                         # pytest unit tests, one module per asset/controller
-data/output_logs/               # Per-run time-series output (gitignored)
+FAILURE MODE — why the bad hours were bad
+  energy-limited                     0.0 h   (reserve below 0.30)
+  power-limited                      1.0 h   (100% of shortfall hours)
+  worst power-limited SoC         0.6159   <- reserve looked this healthy
+                                              while the bus was failing
 ```
 
-## Setup
+**Every hour of unserved power happened at a fleet reserve of 0.62.** Not near
+empty — comfortably above the 0.30 shed threshold, and rising.
+
+The mechanism is the two-tier storage. The battery is efficient and fast
+(50 kW, round trip 0.9025) but shallow; it empties about 36 hours into a
+354-hour night and then sits at its floor for the rest of it. The fuel cell is
+deep but slow — 2090 kWh of deliverable energy behind a **12 kW** stack. So the
+fleet can hold plenty of energy and still be unable to deliver it fast enough:
+
+![Energy reserve against power headroom](docs/figures/two_signals.png)
+
+Top panel: the signal a conventional controller watches. Bottom: the one this
+project adds. The red line is unserved power. It lands where the top panel
+looks healthy and the bottom panel has crossed zero.
+
+The fix is two signals rather than one — a capacity-weighted energy aggregate
+**and** a measured power headroom — with the controller acting on whichever
+fires first.
+
+---
+
+## Quick start
+
+Python 3.11 or newer.
 
 ```bash
+git clone <this repo>
+cd lunar_microgrid_sim
+
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+.venv/bin/pip install -r requirements.txt
+
+.venv/bin/python main.py
 ```
 
-## Running
+That prints an eight-line summary of a nominal 60-day run. The interesting one
+is the contingency:
 
-Not runnable yet — `main.py` will wire everything together once the engine
-exists (see PROGRESS.md).
+```bash
+.venv/bin/python main.py --outage 500 --report
+```
+
+| Flag | Effect |
+|---|---|
+| *(none)* | nominal run, summary only |
+| `--outage HOURS` | scripted 24 h reactor outage starting at that hour |
+| `--report` | the full KPI report — reliability, failure mode, storage duty, dawn margins |
+| `--figures` | render four PNGs into `data/figures/` |
+| `--export` | write the 1440-row history as CSV and JSON |
+
+Everything together:
+
+```bash
+.venv/bin/python main.py --outage 500 --report --figures --export
+```
+
+> The **first** `--figures` run is slow while matplotlib builds its font cache —
+> once, then never again. Without that flag matplotlib is never imported, so a
+> numbers-only run does not pay for a plotting library.
+
+### Tests
+
+```bash
+.venv/bin/python -m pytest tests/ -q        # 188 tests, ~0.4 s
+.venv/bin/python tests/mutation_check.py    # reintroduces 9 real bugs, ~2 min
+```
+
+---
+
+## How it works
+
+The simulation is a loop over 1440 one-hour ticks. Every tick does the same
+five things, in this order:
+
+```
+1. MEASURE     aggregate_soc, the fleet's discharge ceiling, generation,
+               and demand as the loads currently stand.
+                   headroom_w = generation + ceiling - demand
+2. DECIDE      the controller sheds or restores AT MOST ONE load
+3. RE-MEASURE  demand, because step 2 may have changed it
+4. DISPATCH    surplus into storage, or a deficit out of it, in merit order
+5. RECORD      one flat dict describing everything that happened
+```
+
+Two details in that order matter more than they look.
+
+**The controller runs before dispatch, on signals measured at the start of the
+tick.** That is what a real sampled control loop does — and what the
+microcontroller this is eventually meant to run on would do. Letting the
+controller see the result of the dispatch it is deciding about would be a
+forecast of its own interval, which IEEE 2030.7 excludes from core control
+functions.
+
+**Nothing is remembered between ticks.** An earlier design passed the
+controller a shortfall measured at the *end* of the previous tick, and it
+chattered: a successful shed zeroes the shortfall, so the restore branch read
+the cure as the absence of the disease and undid the shed one tick later. The
+signal is now signed and current — negative headroom is the shortfall, positive
+headroom is the margin a load must fit inside before it can come back.
+
+### Who talks to whom
+
+```
+main.py            the ONLY module that names a concrete class.
+  │                build_outpost() is the parts list.
+  ├── environment.py     how much sun is there at time t?
+  ├── assets/
+  │     base_asset.py    PowerSource · PowerStorage · Load  (interfaces)
+  │     generation.py    PVArray · FissionSurfacePower
+  │     storage.py       BatteryBank · RegenerativeFuelCell
+  │     loads.py         ECLSS · ThermalControl · CommsArray · SciencePayload
+  ├── controller.py      ControlStrategy (interface) · AutonomousController
+  ├── power_bus.py       one tick: measure, decide, dispatch, record
+  └── simulation_engine.py   the loop around it, plus CSV/JSON export
+
+metrics.py         what the history MEANS   — pure functions over a list of dicts
+visualization.py   what it LOOKS like        — same
+```
+
+`power_bus.py` and `simulation_engine.py` import **no concrete asset and use no
+`isinstance()` check**. Adding a second reactor or a flywheel is a constructor
+argument in `main.py`; the engine does not change. `metrics.py` and
+`visualization.py` never touch a simulation object at all — they read an
+exported history, so any figure can be redrawn months later from a CSV.
+
+### The control policy
+
+Three branches, tried in order:
+
+| # | Fires when | Dwell timer | Why |
+|---|---|---|---|
+| 1 | `headroom_w < 0` | **bypassed** | the bus is already failing; an uncontrolled brownout drops loads in whatever order physics picks |
+| 2 | `aggregate_soc < 0.30` | enforced | reserves draining, supply still meets demand |
+| 3 | `aggregate_soc > 0.45` **and** the load fits in `headroom_w` | enforced | both signals must agree before anything comes back |
+
+One action per tick — a staircase, not a cliff, so the outpost sheds only as
+much as it actually needs. Loads are shed least-important-first and restored
+most-important-first. **ECLSS is never shed**, under any combination of
+signals: losing life support to save the bus is not a trade this controller may
+make. If a deficit outlives every sheddable load, the correct behaviour is to
+report unserved power and let the record show it.
+
+The gap between the 0.30 and 0.45 thresholds is a hysteresis dead band. Were
+they equal, the outpost would shed at 0.2999, recover to 0.3001, restore, drop
+again, and oscillate every hour for the rest of the night. Contactors have
+finite switching lifetimes.
+
+---
+
+## What is modelled
+
+![Power balance](docs/figures/power_balance.png)
+
+| | Value | Note |
+|---|---|---|
+| Lunar cycle | **708.7 h** synodic | 354.35 h day, 354.35 h night |
+| PV array | 100 m², 30 % triple-junction, 34.9 kW peak | sine of solar elevation, ×0.95 dust derate |
+| Reactor | 10 kWe, optional scripted outage | NASA Kilopower/FSP class |
+| Battery | 200 kWh, 50 kW, round trip 0.9025 | 180.5 kWh deliverable |
+| Fuel cell | 120 kg H₂, 12 kW out / 25 kW in, round trip 0.385 | 2090 kWh deliverable |
+| Loads | 20.5 kW peak, 15.7 kW mean | ECLSS, thermal, comms, science |
+
+The lunar cycle figure is worth dwelling on. The familiar "14 Earth days" gives
+336 h, which is the Moon's *rotation* period halved. A power system does not
+care about rotation — it cares when the Sun comes back, which is the **synodic**
+period of 29.53 days. The shorthand understates the night by 5.1 %, and NASA's
+Fission Surface Power requirement is written against the real figure:
+*"capability for at least 354 hr of nighttime energy storage."*
+
+![Storage reserves](docs/figures/reserves.png)
+
+The two-tier split, visible: the battery (orange) crashes to its floor within
+about 36 hours of nightfall and stays there; the fuel cell (green) carries the
+remaining ~318 hours.
+
+---
+
+## Two results that were not the point but are worth reporting
+
+**27 % of everything generated is thrown away.** 8254 kWh curtailed over 60
+days, because the fuel cell cannot absorb the daylight surplus fast enough
+(25 kW electrolyser against a 32 kW peak surplus, with tanks that fill). That
+is a sizing finding, not a bug.
+
+**Removing two flattering assumptions cost less than expected.** Switching the
+PV from a square wave to a sine profile and adding a dust derate cut daily solar
+*energy* by 38 %. The energy balance still closes with zero unserved — the
+reserve margin merely narrows from 0.241 to 0.174. Daylight surplus was never
+the binding constraint.
+
+---
+
+## Declared simplifications
+
+Stated rather than left to be discovered:
+
+- **No thermal model.** Radiator sizing, regolith conductivity and the cold
+  soak on hardware through the night are all out of scope.
+- **No degradation.** Cells do not fade, catalysts do not poison, and the dust
+  derate is a fixed factor standing in for a process that genuinely worsens
+  over mission life.
+- **No electrical topology.** This is a power balance, not a load flow: no bus
+  voltage, no currents, no converter efficiencies distinct from device
+  efficiencies. A single-line diagram would document intended architecture, not
+  something the model computes.
+- **Equatorial site assumed** by default. `PV_SUN_TRACKING` selects the polar /
+  Vertical Solar Array regime instead, where the sun stays near the horizon and
+  a square wave is closer to correct than a sine.
+- **The restore fit test asks what a load draws *now*.** A duty-cycled load can
+  be restored during its idle window and bite when it switches on. Testing peak
+  demand would need the `Load` interface to publish a nameplate maximum;
+  testing next hour would be forecasting. Exposure is one timestep.
+
+A full audit against NASA and IEEE sources — six findings, all closed — is in
+[`docs/compliance_inspection.html`](docs/compliance_inspection.html).
+
+---
+
+## Testing
+
+188 tests in about 0.4 seconds. They are organised by **failure mode**, not by
+module, because every real bug this project shipped survived a passing test:
+
+| | Catches |
+|---|---|
+| **A** structural | the `@property` family — an abstract property is satisfied by a plain method, and Python only checks the name |
+| **B** variation | *does it respond to its input at all?* |
+| **C** gate before guard | assert the reason, not just the value |
+| **D** conservation | `generation + discharged == served + charged + curtailed`, every tick |
+| **E** boundaries | strict terminator, half-open outage window, `is not None` vs truthiness |
+| **F** control policy | ECLSS never sheds; the chatter regression |
+| **G** engine/export | truncation, clock drift, round trips |
+| **H** scenario pins | the headline numbers, including the 0.6159 claim |
+
+`tests/mutation_check.py` reintroduces nine bugs the project actually shipped
+and confirms the suite goes red for each. **Eight of nine are caught**; the
+ninth is a verified equivalent mutant — removing the night gate leaves the
+clamp, and the two are behaviourally identical for every reachable input
+(measured worst case −3.2e−16).
+
+That check exists because 188 passing tests proved nothing until it ran. Its
+own first two versions were wrong, both reporting false survivals — the worse
+one because every module here carries a Doxygen header that quotes its own
+implementation as pseudocode, so a naive find-and-replace rewrote the
+*documentation* and left the code untouched.
+
+![Load shedding timeline](docs/figures/shed_timeline.png)
+
+---
+
+## Layout
+
+```
+config.py                 every scenario constant, with its source in a comment
+environment.py            day/night cycle and solar geometry
+assets/
+    base_asset.py         PowerSource · PowerStorage · Load interfaces
+    generation.py         PVArray · FissionSurfacePower
+    storage.py            BatteryBank · RegenerativeFuelCell
+    loads.py              the four load tiers
+controller.py             ControlStrategy interface + AutonomousController
+power_bus.py              per-tick energy balance
+simulation_engine.py      time-marching loop, CSV/JSON export
+metrics.py                reliability and failure-mode KPIs
+visualization.py          four figures
+main.py                   entry point and the outpost parts list
+tests/                    188 tests + INVARIANTS.md + mutation_check.py
+docs/                     compliance inspection, figures
+data/                     run outputs (gitignored)
+```
+
+Every module carries a Doxygen-style header with the full `@param` / `@return`
+detail hoisted into an `API` section, so the code below reads without scrolling
+past its own documentation.
+
+---
+
+## Sources
+
+- [NASA Fission Surface Power](https://www.eoportal.org/satellite-missions/fsp-fission) — system requirements, nighttime storage capability
+- [IEEE 2030.7-2017](https://ieeexplore.ieee.org/document/8340204/) — Standard for the Specification of Microgrid Controllers
+- [Lunar dust accumulation on photovoltaic arrays](https://ntrs.nasa.gov/citations/19910020924) — NTRS 19910020924
+- [Lunar South Pole Regenerative Fuel Cell System Efficiency Analysis](https://ntrs.nasa.gov/citations/20220010931)
+- [Lunar Dust Considerations for Vertical Solar Arrays](https://ntrs.nasa.gov/api/citations/20240003496/downloads/TM-20240003496.pdf)
+- [Control of Distributed Hybrid Energy Storage Considering Equivalent SOC](https://www.frontiersin.org/journals/energy-research/articles/10.3389/fenrg.2021.722606/full)
+- [Under-frequency Load Shedding in Islanded Microgrids](https://arxiv.org/pdf/2309.01278)
+
+---
+
+## Author
+
+**Troy Celdran** — BS Electrical Engineering.
+Built with Claude Opus 5 as pair programmer; the split of authorship per build
+step is recorded in `PROGRESS.md` and in the commit history.

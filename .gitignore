@@ -10,3 +10,6 @@ data/output_logs/*.parquet
 data/history_*.csv
 data/history_*.json
 data/figures/
+
+# docs/figures/ IS committed: the README renders results, so a reader
+# should not have to run the simulation to see what it found.

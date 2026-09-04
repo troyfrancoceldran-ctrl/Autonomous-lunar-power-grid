@@ -31,8 +31,9 @@ Authors are Troy Celdran with JARVIS (Claude Opus 5) as co-author.
 - [x] Step 8 — `power_bus.py`: per-tick measure/decide/dispatch/record (Claude). Exposed defect D-01 in the W04 control contract — the shortfall signal was stale by construction; replaced with a signed `headroom_w` measured at the start of each tick. `MIN_ACTION_DWELL_HOURS` 1.0 -> 3.0, which had been a no-op since Step 7.
 - [x] Step 9 — `simulation_engine.py`: fixed-timestep loop + CSV/JSON history export; `main.py` now runnable (Claude)
 - [x] Step 10 — `metrics.py` + `visualization.py`: KPIs and plots (Claude). Headline result: on the t=500 h outage, **100 % of shortfall hours were power-limited at aggregate_soc 0.6159** — the two-signal design measured rather than asserted. Also: 27.3 % of generation curtailed, battery at its floor for 554 of 708 night hours.
-- [ ] Step 11 — `tests/`: pytest coverage per module (USER — assigned 2026-09-04, a deliberate swap from the usual split. Tests would normally be plumbing, but this session produced three passing-for-the-wrong-reason harnesses, so writing the assertions is the exercise. Claude supplies the invariant list; the user writes the suite.)
-- [ ] Step 12 — polish: README, docstring sweep, LICENSE, push to a new public GitHub repo (Claude)
+- [x] Step 11 — `tests/`: 188 tests in 0.4 s, organised by failure mode rather than by module (Claude — reassigned mid-session at the user's request). Plus `tests/mutation_check.py`, which reintroduces nine shipped bugs and confirms 8 are caught; the 9th is a verified equivalent mutant. Seven measurement errors were made writing it, against zero code defects found.
+- [x] Step 12 (part 1) — README rewritten around the result, `--report`/`--figures` flags wired into `main.py`, MIT LICENSE, figures committed to `docs/figures/`, pre-publication audit run (Claude)
+- [ ] Step 12 (part 2) — push to a new public GitHub repo. NEEDS the user's explicit go-ahead, a repo name, and a decision on the commit-author email (see below).
 
 ## Agreed sequence from here (2026-09-04)
 1. **User** writes Step 11 against `tests/INVARIANTS.md`.
