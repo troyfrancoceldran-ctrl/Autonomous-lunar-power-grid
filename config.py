@@ -85,10 +85,17 @@ BATTERY_SOC_MAX: float = 1.00
 BATTERY_CHARGE_EFFICIENCY: float = 0.95
 BATTERY_DISCHARGE_EFFICIENCY: float = 0.95
 
-# Controller hysteresis thresholds (fractions of battery capacity)
+# Controller thresholds, as fractions of the CAPACITY-WEIGHTED FLEET reserve
+# (see power_bus.aggregate_soc), not of any one device.
 SOC_SHED_THRESHOLD: float = 0.30       # start shedding below this
 SOC_RESTORE_THRESHOLD: float = 0.45    # allow restoring above this
-MIN_ACTION_DWELL_HOURS: float = 1.0    # minimum time between shed/restore on the same load
+
+# Minimum interval between two actions on the SAME load. This must be strictly
+# GREATER than TIME_STEP_HOURS or the guard is vacuous: it tests
+# `t - last >= min_dwell`, so at 1.0 h with a 1.0 h tick a load acted on at t
+# is free again at t+1. It sat at 1.0 from Step 7 and went unnoticed until
+# W04 added a branch that bypasses hysteresis and left dwell as the only brake.
+MIN_ACTION_DWELL_HOURS: float = 3.0
 
 
 # --- Regenerative Fuel Cell (RFC) -------------------------------------------
