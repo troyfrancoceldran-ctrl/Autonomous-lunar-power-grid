@@ -1,0 +1,653 @@
+<title>Lunar Microgrid Compliance Audit</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+  :root {
+    --ground:      #EDEEF0;
+    --surface:     #F8F9FA;
+    --surface-alt: #E3E5E9;
+    --ink:         #16181C;
+    --ink-soft:    #5A6068;
+    --ink-faint:   #868D96;
+    --rule:        #CFD4DA;
+    --rule-strong: #A8B0B9;
+    --accent:      #9E5C22;
+    --sev-high:    #A93A25;
+    --sev-med:     #9C6C13;
+    --sev-pass:    #256155;
+    --sev-high-bg: #F0DCD7;
+    --sev-med-bg:  #EEE4CD;
+    --sev-pass-bg: #D6E5E1;
+
+    --measure: 68ch;
+    --step--1: 0.815rem;
+    --step-0:  1.0rem;
+    --step-1:  1.22rem;
+    --step-2:  1.55rem;
+    --step-3:  2.1rem;
+    --step-4:  3.0rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #14161A;
+      --surface:     #1B1E23;
+      --surface-alt: #23272D;
+      --ink:         #E7EAED;
+      --ink-soft:    #9BA2AA;
+      --ink-faint:   #757C85;
+      --rule:        #2C3138;
+      --rule-strong: #414852;
+      --accent:      #CE884A;
+      --sev-high:    #E07358;
+      --sev-med:     #D3A241;
+      --sev-pass:    #55A292;
+      --sev-high-bg: #2E1E1A;
+      --sev-med-bg:  #2B2517;
+      --sev-pass-bg: #162925;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #14161A;
+    --surface:     #1B1E23;
+    --surface-alt: #23272D;
+    --ink:         #E7EAED;
+    --ink-soft:    #9BA2AA;
+    --ink-faint:   #757C85;
+    --rule:        #2C3138;
+    --rule-strong: #414852;
+    --accent:      #CE884A;
+    --sev-high:    #E07358;
+    --sev-med:     #D3A241;
+    --sev-pass:    #55A292;
+    --sev-high-bg: #2E1E1A;
+    --sev-med-bg:  #2B2517;
+    --sev-pass-bg: #162925;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-size: var(--step-0);
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 82ch;
+    margin: 0 auto;
+    padding: clamp(1.5rem, 4vw, 4rem) clamp(1.1rem, 4vw, 2.5rem) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.25rem;
+  }
+
+  h1, h2, h3, .eyebrow, .chip, th, .metric-label {
+    font-family: Archivo, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  .eyebrow {
+    font-size: var(--step--1);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead { display: flex; flex-direction: column; gap: 1.4rem; }
+
+  h1 {
+    font-size: clamp(2.1rem, 6.5vw, var(--step-4));
+    font-weight: 700;
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-size: var(--step-1);
+    color: var(--ink-soft);
+    max-width: var(--measure);
+    margin: 0;
+  }
+
+  .docmeta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 0.1rem 2rem;
+    border-top: 2px solid var(--rule-strong);
+    border-bottom: 1px solid var(--rule);
+    padding: 1rem 0;
+    margin: 0;
+  }
+  .docmeta > div { padding: 0.35rem 0; }
+  .docmeta dt {
+    font-family: Archivo, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 0.15rem;
+  }
+  .docmeta dd {
+    margin: 0;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step--1);
+    color: var(--ink);
+  }
+
+  /* ---------- sections ---------- */
+
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+
+  h2 {
+    font-size: var(--step-2);
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    margin: 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--rule-strong);
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-size: var(--step-0);
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: 0.01em;
+  }
+
+  p { margin: 0; max-width: var(--measure); }
+  section > p + p { margin-top: -0.25rem; }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  code, .num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.88em;
+    font-variant-numeric: tabular-nums;
+  }
+  code { background: var(--surface-alt); padding: 0.08em 0.34em; border-radius: 2px; }
+
+  /* ---------- headline callout ---------- */
+
+  .headline {
+    background: var(--surface);
+    border-left: 4px solid var(--accent);
+    padding: 1.35rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+  .headline blockquote {
+    margin: 0;
+    font-style: italic;
+    font-size: var(--step-1);
+    color: var(--ink);
+    line-height: 1.45;
+  }
+  .headline cite {
+    font-family: Archivo, sans-serif;
+    font-style: normal;
+    font-size: var(--step--1);
+    color: var(--ink-soft);
+  }
+
+  /* ---------- the 336 vs 354 comparison ---------- */
+
+  .barfig {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    background: var(--surface);
+    padding: 1.25rem 1.4rem;
+    border: 1px solid var(--rule);
+  }
+  .barrow { display: grid; grid-template-columns: 8.5rem 1fr auto; align-items: center; gap: 0.9rem; }
+  .barrow .metric-label { font-size: 0.74rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
+  .bartrack { height: 0.85rem; background: var(--surface-alt); position: relative; }
+  .barfill { height: 100%; }
+  .barfill.modelled { background: var(--rule-strong); }
+  .barfill.actual   { background: var(--accent); }
+  .barrow .num { font-size: var(--step--1); color: var(--ink); white-space: nowrap; }
+  .barnote { font-size: var(--step--1); color: var(--ink-soft); margin: 0; }
+
+  /* ---------- findings register ---------- */
+
+  .findings { display: flex; flex-direction: column; gap: 0.9rem; }
+
+  .finding {
+    display: grid;
+    grid-template-columns: 3px 2.6rem 1fr;
+    gap: 0 1rem;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 0;
+    overflow: hidden;
+  }
+  .finding .stripe { grid-row: 1 / -1; }
+  .finding.high .stripe { background: var(--sev-high); }
+  .finding.med  .stripe { background: var(--sev-med); }
+  .finding.low  .stripe { background: var(--sev-pass); }
+
+  .finding .fid {
+    grid-row: 1 / -1;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+    padding: 1.1rem 0 1.1rem 0.9rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .finding .fbody {
+    padding: 1.1rem 1.3rem 1.2rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .finding p { font-size: 0.95rem; }
+  .ftags { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+
+  .chip {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 0.18rem 0.5rem;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .chip.high { background: var(--sev-high-bg); color: var(--sev-high); }
+  .chip.med  { background: var(--sev-med-bg);  color: var(--sev-med); }
+  .chip.low  { background: var(--sev-pass-bg); color: var(--sev-pass); }
+  .chip.done { background: var(--sev-pass-bg); color: var(--sev-pass); }
+  .chip.open { background: var(--surface-alt); color: var(--ink-soft); }
+  .chip.auth { background: transparent; color: var(--ink-faint); border: 1px solid var(--rule); font-weight: 500; letter-spacing: 0.05em; text-transform: none; font-family: "IBM Plex Mono", monospace; }
+
+  /* ---------- tables ---------- */
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.62rem 0.9rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--ink-faint); background: var(--surface-alt); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td:last-child { color: var(--ink-soft); }
+  .mono { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; font-size: 0.84rem; }
+
+  /* ---------- work order ---------- */
+
+  .order { display: flex; flex-direction: column; gap: 1.4rem; counter-reset: task; }
+  .task {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0 1.1rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--rule);
+  }
+  .task::before {
+    counter-increment: task;
+    content: "W" counter(task, decimal-leading-zero);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    color: var(--accent);
+    padding-top: 0.2rem;
+  }
+  .taskbody { display: flex; flex-direction: column; gap: 0.6rem; }
+  .taskbody ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.3rem; }
+  .taskbody li { font-size: 0.95rem; }
+  .file { font-family: "IBM Plex Mono", monospace; font-size: 0.8rem; color: var(--ink-faint); }
+
+  pre {
+    margin: 0;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-strong);
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  /* ---------- sources ---------- */
+
+  .sources { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.55rem; }
+  .sources li { font-size: 0.9rem; padding-left: 1.4rem; text-indent: -1.4rem; }
+
+  footer {
+    border-top: 2px solid var(--rule-strong);
+    padding-top: 1rem;
+    font-size: var(--step--1);
+    color: var(--ink-faint);
+    font-family: Archivo, sans-serif;
+  }
+
+  @media (max-width: 34rem) {
+    .barrow { grid-template-columns: 1fr; gap: 0.25rem; }
+    .finding { grid-template-columns: 3px 1fr; }
+    .finding .fid { grid-row: auto; padding: 0.9rem 0 0 0.9rem; }
+    .finding .fbody { padding: 0.4rem 1.1rem 1.1rem 0.9rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Compliance inspection · Steps 0–7</p>
+    <h1>Lunar Microgrid Compliance Audit</h1>
+    <p class="standfirst">An inspection of the outpost power simulation against NASA Fission Surface Power requirements, NASA Glenn regenerative fuel cell data, and IEEE 2030.7. Six findings; one of them a direct requirement violation.</p>
+    <dl class="docmeta">
+      <div><dt>Subject</dt><dd>lunar_microgrid_sim</dd></div>
+      <div><dt>Inspected</dt><dd>2026-09-04</dd></div>
+      <div><dt>Scope</dt><dd>Steps 0–7, 19 commits</dd></div>
+      <div><dt>Findings</dt><dd>3 high · 2 medium · 1 low</dd></div>
+      <div><dt>Closed</dt><dd>3 of 6</dd></div>
+      <div><dt>Inspectors</dt><dd>T. Celdran · JARVIS</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <h2>The headline finding</h2>
+    <p>The simulation modelled the lunar night as 336 hours — the familiar “14 Earth days” shorthand. That figure is the Moon’s <em>rotation</em> period halved. A power system does not care about rotation; it cares when the Sun comes back, which is the <strong>synodic</strong> period of 29.53 days, or 708.7 hours.</p>
+
+    <div class="headline">
+      <blockquote>“…capability for at least 354 hr of nighttime energy storage.”</blockquote>
+      <cite>NASA Fission Surface Power — extended surface mission requirement</cite>
+    </div>
+
+    <div class="barfig">
+      <div class="barrow">
+        <span class="metric-label">As modelled</span>
+        <div class="bartrack"><div class="barfill modelled" style="width:94.9%"></div></div>
+        <span class="num">336.00 h</span>
+      </div>
+      <div class="barrow">
+        <span class="metric-label">Synodic actual</span>
+        <div class="bartrack"><div class="barfill actual" style="width:100%"></div></div>
+        <span class="num">354.35 h</span>
+      </div>
+      <p class="barnote">18.35 h of every night went unmodelled — 5.1 % of the design case. Night energy demand rises from 1 737 kWh to 1 832 kWh, taking the nominal night from 77 % to <strong>81 % of total stored reserve</strong>.</p>
+    </div>
+
+    <p>Nothing outside <code>config.py</code> required editing. Every module derives its timing from those constants, so the corrected period propagated through the environment model, both generation assets, both storage devices and all four loads without a line changing. That was the point of the constraint.</p>
+  </section>
+
+  <section>
+    <h2>Findings register</h2>
+    <div class="findings">
+
+      <article class="finding high">
+        <div class="stripe"></div>
+        <div class="fid">F-01</div>
+        <div class="fbody">
+          <h3>Lunar night understated by 5.1 %</h3>
+          <div class="ftags">
+            <span class="chip high">High</span>
+            <span class="chip done">Closed</span>
+            <span class="chip auth">NASA FSP</span>
+          </div>
+          <p>Day and night were set to <code>14 × 24 = 336 h</code>, conflating the tidally-locked rotation period with the synodic day. Corrected to <code>708.7 / 2 = 354.35 h</code> each. <code>SIM_DURATION_DAYS</code> raised 56 → 60, because at the true cycle length 56 days covered only 1.90 synodic cycles against a stated requirement of at least two.</p>
+        </div>
+      </article>
+
+      <article class="finding high">
+        <div class="stripe"></div>
+        <div class="fid">F-02</div>
+        <div class="fbody">
+          <h3>PV square wave silently assumes a sun-tracking array</h3>
+          <div class="ftags">
+            <span class="chip high">High</span>
+            <span class="chip open">Open — W01</span>
+            <span class="chip auth">Solar geometry · NASA VSAT</span>
+          </div>
+          <p>Irradiance returns a flat 1.0 for the whole lunar day. That is only true for a two-axis tracker or a NASA-style Vertical Solar Array. A fixed horizontal array at an equatorial site sees output vary as the sine of solar elevation, averaging <span class="num">2/π = 0.637</span> of peak — so the current model overstates daily energy by <strong>36 %</strong> unless tracking is declared. <code>PV_SUN_TRACKING</code> now records the assumption explicitly; the physics is still to be written.</p>
+        </div>
+      </article>
+
+      <article class="finding high">
+        <div class="stripe"></div>
+        <div class="fid">F-03</div>
+        <div class="fbody">
+          <h3>The reactor never fails</h3>
+          <div class="ftags">
+            <span class="chip high">High</span>
+            <span class="chip open">Open — W03</span>
+            <span class="chip auth">NASA FSP autonomy</span>
+          </div>
+          <p><code>FSP_AVAILABILITY = 1.0</code> models a reactor that is online every hour of a ten-year life. NASA’s requirement set assumes autonomous start and stop precisely because outages happen. Worse, the contingency is already known to be survivable-by-luck rather than by design: with the battery flat and the tanks at 95 %, an aggregate state-of-charge signal reads <span class="num">0.872</span> while a reactor outage leaves <span class="num">7.5 kW</span> of load unserved — including part of life support.</p>
+        </div>
+      </article>
+
+      <article class="finding med">
+        <div class="stripe"></div>
+        <div class="fid">F-04</div>
+        <div class="fbody">
+          <h3>No lunar dust derate on the array</h3>
+          <div class="ftags">
+            <span class="chip med">Medium</span>
+            <span class="chip open">Open — W02</span>
+            <span class="chip auth">NTRS 19910020924</span>
+          </div>
+          <p>NASA measurements show cell short-circuit current falling <em>exponentially</em> with deposited dust mass, and every nearby landing adds more — roughly 0.28 mg/cm² at 2 km after ten missions. Regolith is also an insulator, so it degrades radiator performance at the same time. <code>PV_DUST_DERATE</code> is a fixed stand-in for a mechanism that genuinely worsens across mission life.</p>
+        </div>
+      </article>
+
+      <article class="finding med">
+        <div class="stripe"></div>
+        <div class="fid">F-05</div>
+        <div class="fbody">
+          <h3>Run duration below the two-cycle requirement</h3>
+          <div class="ftags">
+            <span class="chip med">Medium</span>
+            <span class="chip done">Closed</span>
+            <span class="chip auth">Project requirement</span>
+          </div>
+          <p>Consequential to F-01: the 56-day run was written against the 672 h cycle. At 708.7 h it captured 1.90 cycles, so the second charge/discharge round trip never completed and any cumulative drift in stored hydrogen would have gone unobserved. Now 60 days — 2.03 cycles.</p>
+        </div>
+      </article>
+
+      <article class="finding low">
+        <div class="stripe"></div>
+        <div class="fid">F-06</div>
+        <div class="fbody">
+          <h3>95 % battery depth of discharge left unjustified</h3>
+          <div class="ftags">
+            <span class="chip low">Low — defensible</span>
+            <span class="chip done">Closed</span>
+            <span class="chip auth">LEO practice · lunar rover</span>
+          </div>
+          <p>LEO spacecraft hold depth of discharge below 30 %, and a lunar rover battery is capped at 38 %. A <code>BATTERY_SOC_MIN</code> of 0.05 looked reckless beside those figures. It is not — but only because of cycle count: a surface system sees one cycle per synodic period, about <span class="num">124</span> across a ten-year life, against roughly 50 000 in LEO. The justification is now recorded in <code>config.py</code>, with a note that it must be revisited if the mission profile changes.</p>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>What already complies</h2>
+    <p>Six design decisions made earlier in the build turn out to match established practice. Worth recording, because they were reasoned from first principles rather than copied.</p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Element</th><th scope="col">As built</th><th scope="col">Authority</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Controller inputs</td>
+            <td class="mono">real-time state only</td>
+            <td>IEEE 2030.7 forbids forecasts in core-level functions</td>
+          </tr>
+          <tr>
+            <td>Chatter suppression</td>
+            <td class="mono">0.30 / 0.45 + 1 h dwell</td>
+            <td>UFLS practice: threshold, tripping delay, recovery delay</td>
+          </tr>
+          <tr>
+            <td>Restoration</td>
+            <td class="mono">one load per tick</td>
+            <td>UFLS staggered recovery — deterministic rather than randomised</td>
+          </tr>
+          <tr>
+            <td>Critical load</td>
+            <td class="mono">never shed</td>
+            <td>IEEE 2030.7 critical-load protection</td>
+          </tr>
+          <tr>
+            <td>Fuel cell efficiency</td>
+            <td class="mono">0.55</td>
+            <td>NASA Glenn measured 0.54 in test</td>
+          </tr>
+          <tr>
+            <td>Storage dispatch order</td>
+            <td class="mono">battery, then RFC</td>
+            <td>Matches hybrid hydrogen–battery EMS literature</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>One caveat carried from that last row: the same literature warns that battery-priority dispatch is <em>“feasible and economical for short-term operation”</em> but <em>“does not account for seasonal variations… which will result in a lack of pre-stored hydrogen and load losses in long-term operations.”</em> The 60-day run is the test — if the fuel cell finishes each cycle lower than it started, the architecture does not close.</p>
+  </section>
+
+  <section>
+    <h2>Declared simplifications</h2>
+    <p>Not findings. These are boundaries of the model, and the difference between an engineering simulation and an ideal machine is whether they are stated or discovered.</p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Simplification</th><th scope="col">What reality adds</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>RFC is an energy model, not a mass model</td>
+            <td>No tankage, stack or radiator mass; no thermal parasitics; no pressure dependence — NASA reports ~4 points of round-trip efficiency between 27.6 and 10.3 MPa. The <span class="mono">33 333 Wh/kg</span> here is hydrogen’s heating value; NASA’s <em>system-level</em> target is 110 → 550 Wh/kg.</td>
+          </tr>
+          <tr>
+            <td>No degradation over mission life</td>
+            <td>Array output and battery capacity both fade. Currently only dust is represented, and only as a constant.</td>
+          </tr>
+          <tr>
+            <td>No survival or dormant mode</td>
+            <td>NASA separates nominal operations from survival, where thermal control plus essential life support falls to <span class="mono">1–3 kW</span>. The CRITICAL tier here is a flat 6.5 kW with no lower gear.</td>
+          </tr>
+          <tr>
+            <td>No IEEE 2030.7 transition function</td>
+            <td>Genuinely not applicable — a lunar grid is permanently islanded and never reconnects to a utility.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Remediation work order</h2>
+    <p>Three open findings and one design decision, in the order they should be taken. Numbered because they are a sequence: W01 changes what the environment reports, which W02 consumes.</p>
+
+    <div class="order">
+
+      <div class="task">
+        <div class="taskbody">
+          <h3>Solar elevation profile</h3>
+          <p class="file">environment.py · closes F-02</p>
+          <p>The Sun’s <em>intensity</em> doesn’t change across the lunar day — there is no atmosphere to attenuate it. What changes is the <em>geometry</em> between the Sun and a fixed array. So this belongs in the environment as a second, separate question, leaving <code>solar_irradiance_fraction</code> exactly as it is:</p>
+          <pre><code>solar_elevation_fraction(t_hours) -> float
+    phase = (t_hours + start_phase_hours) % LUNAR_CYCLE_HOURS
+    if phase >= LUNAR_DAY_HOURS:   return 0.0
+    return sin(pi * phase / LUNAR_DAY_HOURS)</code></pre>
+          <ul>
+            <li>0.0 at sunrise, 1.0 at local noon, 0.0 at sunset; mean 0.637.</li>
+            <li>Needs <code>import math</code>, and a shared <code>_phase_hours()</code> helper so this and <code>is_daylight</code> cannot disagree about where the terminator falls.</li>
+            <li>Whether the array <em>uses</em> this is a property of the array, not of the Moon — which is why the flag lives on <code>PVArray</code>, not here.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="taskbody">
+          <h3>Array derating and tracking</h3>
+          <p class="file">assets/generation.py · closes F-04, consumes W01</p>
+          <p><code>PVArray.__init__</code> gains <code>dust_derate=PV_DUST_DERATE</code> and <code>sun_tracking=PV_SUN_TRACKING</code>. The power chain then becomes:</p>
+          <pre><code>geometry = (environment.solar_irradiance_fraction(t_hours)
+            if self.sun_tracking
+            else environment.solar_elevation_fraction(t_hours))
+
+return (SOLAR_CONSTANT_W_PER_M2 * self.area_m2 * self.efficiency
+        * self.packing_factor * self.dust_derate * geometry)</code></pre>
+          <ul>
+            <li>Both branches already return 0.0 at night, so no extra guard is needed.</li>
+            <li>Expect peak to fall <span class="mono">36 747 → 34 910 W</span> from dust alone, and daily <em>energy</em> to fall a further 36 % once tracking is off.</li>
+            <li>That is a large reduction. Re-check the night energy balance afterwards — <code>PV_AREA_M2</code> may need to grow, which is itself a realistic finding.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="taskbody">
+          <h3>Reactor outage window</h3>
+          <p class="file">assets/generation.py · closes F-03</p>
+          <p><code>FissionSurfacePower</code> gains <code>outage_start_hours</code> and <code>outage_duration_hours</code> from config:</p>
+          <pre><code>if (self.outage_start_hours is not None
+        and self.outage_start_hours &lt;= t_hours
+        &lt; self.outage_start_hours + self.outage_duration_hours):
+    return 0.0
+return self.rated_power_w * self.availability</code></pre>
+          <ul>
+            <li>Scripted rather than stochastic, so a contingency run is reproducible and a reviewer can see exactly what was tested.</li>
+            <li>Note what this does to the docstring: <code>t_hours</code> has been “deliberately unused” since Step 3. It is now load-bearing. The uniform signature that looked like ceremony turns out to have been foresight.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="taskbody">
+          <h3>Dual-signal control interface</h3>
+          <p class="file">base_asset.py · controller.py · power_bus.py</p>
+          <p>The Step 8 design decision, resolved in favour of defence in depth. An energy-limited failure and a power-limited failure are different events; one detector cannot see both. <code>PowerStorage</code> gains three read-only properties:</p>
+          <pre><code>deliverable_energy_wh        # what I could still put on the bus, after losses
+deliverable_capacity_wh      # what I could put on the bus when full
+available_discharge_power_w  # what I could deliver right now, this instant</code></pre>
+          <ul>
+            <li>Fractions cannot be summed across devices of different sizes — the battery holds 7.9 % of the reserve but would carry 50 % of the vote in a naive average. Energy-weighted aggregation is what the equivalent-state-of-charge literature specifies, and each device must therefore report watt-hours, not a percentage.</li>
+            <li><code>ControlStrategy.update()</code> gains a <code>shortfall_w</code> argument: <span class="mono">max(0, demand − generation − available storage power)</span>. Positive means this hour browns out unless load is shed now.</li>
+            <li>Every term is measurable at the start of the tick, so this is a real-time calculation and not a forecast — which keeps it inside IEEE 2030.7’s core-function rule.</li>
+            <li>The controller acts <em>before</em> dispatch, on state carried from the previous tick. Sample, decide, actuate, let the hour play out — the same loop the microcontroller will run.</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Authorities consulted</h2>
+    <ul class="sources">
+      <li><a href="https://www.eoportal.org/satellite-missions/fsp-fission">NASA Fission Surface Power — system requirements and lunar night storage capability</a></li>
+      <li><a href="https://ieeexplore.ieee.org/document/8340204/">IEEE 2030.7-2017 — Standard for the Specification of Microgrid Controllers</a></li>
+      <li><a href="https://www.frontiersin.org/journals/energy-research/articles/10.3389/fenrg.2021.722606/full">Control of the Distributed Hybrid Energy Storage System Considering the Equivalent SOC</a></li>
+      <li><a href="https://arxiv.org/html/2407.21698v1">Long-Term Energy Management for Microgrid with Hybrid Hydrogen-Battery Energy Storage</a></li>
+      <li><a href="https://arxiv.org/pdf/2309.01278">Under-frequency Load Shedding for Power Reserve Management in Islanded Microgrids</a></li>
+      <li><a href="https://ntrs.nasa.gov/citations/19910020924">The effects of lunar dust accumulation on the performance of photovoltaic arrays</a></li>
+      <li><a href="https://ntrs.nasa.gov/citations/20220010931">Lunar South Pole Regenerative Fuel Cell System Efficiency Analysis</a></li>
+      <li><a href="https://ntrs.nasa.gov/api/citations/20240003496/downloads/TM-20240003496.pdf">Lunar Dust Considerations for Vertical Solar Arrays</a></li>
+    </ul>
+  </section>
+
+  <footer>
+    Inspection closed 2026-09-04 · 3 findings remediated, 3 raised as work orders · Steps 8–12 outstanding
+  </footer>
+
+</div>
