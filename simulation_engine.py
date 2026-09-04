@@ -139,7 +139,7 @@ class SimulationEngine:
     """Marches a PowerBus through time and keeps every record it returns."""
 
     def __init__(self, bus, duration_hours: float = SIM_DURATION_HOURS,
-                 dt_hours: float = TIME_STEP_HOURS):
+                dt_hours: float = TIME_STEP_HOURS):
         """Configure a run; nothing is simulated until run() is called."""
         self.bus = bus
         self.duration_hours = duration_hours
@@ -184,7 +184,7 @@ class SimulationEngine:
     def summary(self) -> dict:
         """Run-level totals for a one-line console report; not metrics.py."""
         if not self.history:
-            raise RuntimeError("nothing to summarise — call run() first")
+            raise RuntimeError("nothing to summarize — call run() first")
         dt = self.dt_hours
         return {
             "hours": self.duration_hours,

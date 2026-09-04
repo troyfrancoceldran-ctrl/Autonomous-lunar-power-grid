@@ -29,9 +29,9 @@ Authors are Troy Celdran with JARVIS (Claude Opus 5) as co-author.
       - F-03 scripted reactor outage window
       - the two-signal control contract: capacity-weighted `aggregate_soc` + `shortfall_w`
 - [x] Step 8 — `power_bus.py`: per-tick measure/decide/dispatch/record (Claude). Exposed defect D-01 in the W04 control contract — the shortfall signal was stale by construction; replaced with a signed `headroom_w` measured at the start of each tick. `MIN_ACTION_DWELL_HOURS` 1.0 -> 3.0, which had been a no-op since Step 7.
-- [ ] Step 9 — `simulation_engine.py`: 60-day time-marching loop + history log
-- [ ] Step 10 — `metrics.py` + `visualization.py`: KPIs and plots
-- [ ] Step 11 — `tests/`: pytest coverage per module
+- [x] Step 9 — `simulation_engine.py`: fixed-timestep loop + CSV/JSON history export; `main.py` now runnable (Claude)
+- [ ] Step 10 — `metrics.py` + `visualization.py`: KPIs and plots (Claude)
+- [ ] Step 11 — `tests/`: pytest coverage per module (USER — assigned 2026-09-04, a deliberate swap from the usual split. Tests would normally be plumbing, but this session produced three passing-for-the-wrong-reason harnesses, so writing the assertions is the exercise. Claude supplies the invariant list; the user writes the suite.)
 - [ ] Step 12 — polish: docstrings, README run instructions, push to GitHub
 
 Each step should be its own git commit, so the repo history itself tells

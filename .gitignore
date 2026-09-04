@@ -9,3 +9,4 @@ data/output_logs/*.parquet
 *.egg-info/
 data/history_*.csv
 data/history_*.json
+data/figures/

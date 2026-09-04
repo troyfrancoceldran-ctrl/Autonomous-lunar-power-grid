@@ -125,5 +125,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     label = ("nominal" if args.outage is None
-             else f"FSP outage at t={args.outage:.0f} h")
+            else f"FSP outage at t={args.outage:.0f} h")
     run_scenario(label, outage_start_hours=args.outage, export=args.export)

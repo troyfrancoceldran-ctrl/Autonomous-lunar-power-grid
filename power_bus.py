@@ -145,18 +145,20 @@ step(t_hours, dt_hours) -> dict
     @note Each storage device is charged or discharged AT MOST ONCE per tick,
         which is the precondition storage.py's charge()/discharge() state.
 
-_dispatch_surplus(surplus_w, dt_hours) -> (absorbed_w, curtailed_w)  [internal]
+_dispatch_surplus(surplus_w, dt_hours) -> (absorbed_w, curtailed_w, flows)
+                                                                    [internal]
     Push surplus into storage in merit order; whatever no device will take is
-    curtailed.
+    curtailed. `flows` maps device name -> power absorbed [W].
 
     @note Curtailment is a real operation, not a modelling failure: a full
         battery and full tanks in bright sun means the array is regulated
         down. Recording it separately from generation is what lets Step 10
         show how much sunlight the outpost had to throw away.
 
-_dispatch_deficit(deficit_w, dt_hours) -> (delivered_w, shortfall_w)  [internal]
+_dispatch_deficit(deficit_w, dt_hours) -> (delivered_w, shortfall_w, flows)
+                                                                    [internal]
     Draw a deficit out of storage in merit order; whatever no device can
-    supply is unserved.
+    supply is unserved. `flows` maps device name -> power delivered [W].
 
     @note The residue is shortfall_w — the outpost browning out. It is
         returned rather than raised, because a brownout is a result to be
@@ -188,6 +190,20 @@ hand it straight to a DataFrame with no reshaping.
     n_shed                   int     how many loads are currently shed
     gen:<source name>        float   per-source available power [W]
     soc:<storage name>       float   per-device state_of_charge AFTER dispatch
+    flow:<storage name>      float   SIGNED per-device power [W]: positive
+                                    charging, negative discharging, 0 idle
+    load:<load name>         float   per-load EFFECTIVE demand [W], 0 if shed
+    shed:<load name>         bool    whether that load is currently shed
+
+@note The per-load and per-device columns exist so the history is
+    self-describing: every question metrics.py or a visualization can ask is
+    answerable from the file alone, with no need to re-run the simulation or
+    reach back into the live objects. That is what makes to_json() a complete
+    feed rather than a summary.
+@note flow: is SIGNED on one axis rather than split into two columns, because
+    a device is never charging and discharging in the same tick — the sign is
+    free information, and one column plots directly as a single trace through
+    zero.
 
 @note aggregate_soc is sampled before dispatch and the per-device soc: keys
     after it. That is deliberate and they will not agree within a row — the
@@ -241,24 +257,28 @@ class PowerBus:
         return generation_w + self.storage_power_ceiling_w(dt_hours) - demand_w
 
     def _dispatch_surplus(self, surplus_w: float, dt_hours: float):
-        """Charge storage in merit order; returns (absorbed_w, curtailed_w)."""
+        """Charge in merit order; returns (absorbed_w, curtailed_w, flows)."""
         remaining_w = surplus_w
         absorbed_w = 0.0
+        flows = {}
         for device in self.storage:
             accepted_w = device.charge(remaining_w, dt_hours)
+            flows[device.name] = accepted_w
             absorbed_w += accepted_w
             remaining_w = max(0.0, remaining_w - accepted_w)
-        return absorbed_w, remaining_w
+        return absorbed_w, remaining_w, flows
 
     def _dispatch_deficit(self, deficit_w: float, dt_hours: float):
-        """Discharge storage in merit order; returns (delivered_w, shortfall_w)."""
+        """Discharge in merit order; returns (delivered_w, shortfall_w, flows)."""
         remaining_w = deficit_w
         delivered_w = 0.0
+        flows = {}
         for device in self.storage:
             supplied_w = device.discharge(remaining_w, dt_hours)
+            flows[device.name] = -supplied_w        # signed: out of the device
             delivered_w += supplied_w
             remaining_w = max(0.0, remaining_w - supplied_w)
-        return delivered_w, remaining_w
+        return delivered_w, remaining_w, flows
 
     def step(self, t_hours: float, dt_hours: float = TIME_STEP_HOURS) -> dict:
         """Advance one tick: measure, decide, re-measure, dispatch, record."""
@@ -279,10 +299,11 @@ class PowerBus:
 
         # 4. DISPATCH — at most one charge or discharge call per device.
         charged_w = discharged_w = curtailed_w = shortfall_w = 0.0
+        flows = {device.name: 0.0 for device in self.storage}
         if net_w > 0.0:
-            charged_w, curtailed_w = self._dispatch_surplus(net_w, dt_hours)
+            charged_w, curtailed_w, flows = self._dispatch_surplus(net_w, dt_hours)
         elif net_w < 0.0:
-            discharged_w, shortfall_w = self._dispatch_deficit(-net_w, dt_hours)
+            discharged_w, shortfall_w, flows = self._dispatch_deficit(-net_w, dt_hours)
 
         # 5. RECORD
         record = {
@@ -307,4 +328,8 @@ class PowerBus:
                 t_hours, self.environment)
         for device in self.storage:
             record[f"soc:{device.name}"] = device.state_of_charge
+            record[f"flow:{device.name}"] = flows[device.name]
+        for load in self.loads:
+            record[f"load:{load.name}"] = load.effective_demand(t_hours)
+            record[f"shed:{load.name}"] = load.shed
         return record
