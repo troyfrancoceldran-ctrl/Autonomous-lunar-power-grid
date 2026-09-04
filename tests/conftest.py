@@ -92,18 +92,14 @@ def outage_history():
 def fine_history():
     """A 48 h run at dt = 0.25 h, for timestep-independence checks. READ-ONLY."""
     engine = SimulationEngine(build_outpost(LunarEnvironment()),
-                              duration_hours=48.0, dt_hours=0.25)
+                            duration_hours=48.0, dt_hours=0.25)
     return engine.run()
 
 
-# --- names, so no test ever retypes one -------------------------------------
+# --- names ------------------------------------------------------------------
 #
-# Retyping "Comms Array" instead of "Communications Array" cost a whole test
-# run during Step 8. Import these; never write a load name as a literal.
-
-ECLSS_NAME = ECLSS().name
-THERMAL_NAME = ThermalControl(LunarEnvironment()).name
-COMMS_NAME = CommsArray().name
-SCIENCE_NAME = SciencePayload().name
-BATTERY_NAME = BatteryBank().name
-RFC_NAME = RegenerativeFuelCell().name
+# They live in tests/names.py, not here: pytest loads conftest.py under its
+# own module name, so a test importing `conftest` would execute this file a
+# second time and build a second set of load objects.
+#
+#     from tests.names import COMMS_NAME, ECLSS_NAME
