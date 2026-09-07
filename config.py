@@ -222,3 +222,10 @@ MIN_CONDUCTOR_AREA_M2: float = 1.31e-6
 # the ones that currently have no losses at all. NASA's UMIC rack targets
 # > 95 % at 10 kW.
 CONVERTER_EFFICIENCY: float = 0.95
+
+# PROVISIONAL — the reactor link's transmission voltage. This is a T01
+# DECISION, not a given: it should fall out of the mass-versus-voltage trade
+# (conductor mass ~ 1/V^2, insulation mass ~ V) clamped by MAX_RAD_HARD_DC_V
+# and by how many 160 V devices you are willing to stack. 1000 V is a
+# placeholder that keeps the topology constructible until that work is done.
+TRANSMISSION_VOLTAGE_V: float = 1000.0

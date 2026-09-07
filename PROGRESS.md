@@ -54,8 +54,13 @@ Two upgrades, taken together because the second is more useful once the first
 exists. Both are in the README roadmap.
 - [ ] **Electrical topology** — split into four work orders, spec in
       `topology.py`'s module docstring, constants in `config.py`.
-      - [ ] **T01** `topology.py` — Feeder/DCBus: R(T), current, voltage drop,
-            I^2R, conductor mass, sizing from a loss budget. (USER)
+      - [~] **T01** `topology.py` — SPLIT 2026-09-07. Plumbing done by Claude
+            (dataclasses, conductor_mass_kg, DCBus aggregation,
+            build_topology, 26 tests). Electrical core is the USER's:
+            resistance_ohm, current_a, voltage_drop_v, loss_w,
+            size_for_loss_budget. Tests for those SKIP until each method
+            lands, so the suite stays green — `pytest -rs` prints the
+            remaining work as a skip list. 12 pass, 14 skipped.
       - [ ] **T02** `power_bus.py` — wire feeders into the tick; the
             conservation identity gains loss terms. (Claude)
       - [ ] **T03** converters — converter efficiency as distinct from device

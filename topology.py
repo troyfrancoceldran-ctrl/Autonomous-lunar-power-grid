@@ -57,9 +57,7 @@ stacked-DC route stays tractable, which is the case modelled here.
 --------------------------------------------------------------------------------
 WORK ORDERS
 --------------------------------------------------------------------------------
-    T01  this file  Feeder and DCBus: R(T), current, voltage drop, I^2R,
-                    conductor mass, and the sizing rule that follows from a
-                    loss budget.                                     <- YOU
+    T01  this file  Feeder and DCBus.
     T02  power_bus  Wire feeders into the tick. The conservation identity
                     gains loss terms and stops closing at exactly zero.
     T03  converters Converter efficiency as a thing distinct from device
@@ -68,8 +66,36 @@ WORK ORDERS
     T04  protection Fault current, device ratings, zonal coordination, and
                     the DC arc-interruption problem.
 
-Per the working agreement the physics in T01 is yours; ask for syntax or
-algorithm help at any point and it appears. T02 plumbing is mine.
+--------------------------------------------------------------------------------
+HOW T01 IS SPLIT
+--------------------------------------------------------------------------------
+Agreed 2026-09-07: the ELECTRICAL CORE is the user's, the PLUMBING is Claude's.
+The line is drawn at whether a method encodes a decision about electricity or
+merely moves numbers around.
+
+    USER — the electrical core                     marked  >>> YOURS
+        resistance_ohm          rho(T), and R from geometry
+        current_a               I = P / V
+        voltage_drop_v          dV = I R
+        loss_w                  P = I^2 R
+        size_for_loss_budget    the A >= ... / V^2 derivation
+        (T04 later)             fault current and device ratings
+
+    CLAUDE — the plumbing                          already implemented
+        Feeder / DCBus dataclasses and conductor_length_m
+        conductor_mass_kg       geometry and density, no electricity in it
+        DCBus aggregation       summing over feeders
+        build_topology()        which feeders exist and what they connect
+        T02 wiring, record schema, tests
+
+Every plumbing method below WORKS NOW. The six marked >>> YOURS raise
+NotImplementedError, and `tests/test_topology.py` skips the tests that depend
+on them until they stop raising — so the suite stays green while you work and
+lights up method by method as you go. Nothing to configure; just implement and
+re-run pytest.
+
+Ask for syntax or algorithm help at any point and it appears; the engineering
+judgement stays yours.
 
 --------------------------------------------------------------------------------
 T01 SPEC — WHAT TO IMPLEMENT
@@ -113,15 +139,19 @@ there are three specific traps flagged below.
     number. Convince yourself of that before moving on; if they disagree in
     your implementation, one of them is wrong.
 
-4.  conductor_mass_kg(self) -> float
+4.  conductor_mass_kg(self)                                  [DONE — plumbing]
 
         m = density * A * L_conductor
 
-    Round-trip length again.
+    Geometry and density, no electricity in it, so it is on my side of the
+    line. Written and tested; read it if you want the round-trip length
+    handled correctly in one place.
 
-5.  DCBus.total_loss_w(...) and DCBus.total_conductor_mass_kg()
+5.  DCBus aggregation                                        [DONE — plumbing]
 
-    Sum over feeders. Trivial once the above is right.
+    total_loss_w() and total_conductor_mass_kg() both work. total_loss_w
+    calls YOUR loss_w, so it will raise until method 3b lands — which is the
+    point: the plumbing is ready and waiting on the physics.
 
 6.  Feeder.size_for_loss_budget(...)  [CLASSMETHOD, the interesting one]
 
@@ -222,7 +252,10 @@ import dataclasses
 from config import (CABLE_TEMP_DAY_K, CABLE_TEMP_NIGHT_K,
                     CABLE_TEMP_REFERENCE_K, CONDUCTOR_DENSITY_KG_PER_M3,
                     CONDUCTOR_RESISTIVITY_OHM_M, CONDUCTOR_TEMP_COEFF_PER_K,
-                    MIN_CONDUCTOR_AREA_M2)
+                    FSP_RATED_POWER_W, FSP_SEPARATION_M,
+                    MAX_FEEDER_LOSS_FRACTION, MIN_CONDUCTOR_AREA_M2,
+                    TRANSMISSION_VOLTAGE_V, USER_BUS_MAX_SPAN_M,
+                    USER_BUS_VOLTAGE_V)
 
 
 def cable_temperature_k(is_daylight: bool) -> float:
@@ -245,7 +278,7 @@ class Feeder:
         return 2.0 * self.length_m
 
     # =========================================================================
-    # START EDITING HERE — T01, method 1
+    # START EDITING HERE — T01, method 1                            >>> YOURS
     # =========================================================================
     def resistance_ohm(self, temperature_k: float) -> float:
         """Round-trip resistance at a conductor temperature.
@@ -257,12 +290,12 @@ class Feeder:
         """
         raise NotImplementedError("T01 method 1")
 
-    # ------------------------------------------------------------------ 2 ---
+    # ------------------------------------------------------------- 2 >>> YOURS
     def current_a(self, power_w: float, voltage_v: float) -> float:
         """I = P / V; 0.0 for a non-positive voltage."""
         raise NotImplementedError("T01 method 2")
 
-    # ------------------------------------------------------------------ 3 ---
+    # ------------------------------------------------------------- 3 >>> YOURS
     def voltage_drop_v(self, power_w: float, voltage_v: float,
                        temperature_k: float) -> float:
         """dV = I * R."""
@@ -273,12 +306,18 @@ class Feeder:
         """P_loss = I^2 * R."""
         raise NotImplementedError("T01 method 3b")
 
-    # ------------------------------------------------------------------ 4 ---
+    # --------------------------------------------------------- 4 — plumbing
     def conductor_mass_kg(self) -> float:
-        """m = density * area * round-trip length."""
-        raise NotImplementedError("T01 method 4")
+        """Mass of conductor in this run, both directions.
 
-    # ------------------------------------------------------------------ 6 ---
+        Geometry and density only — no electricity, which is why it sits on
+        the plumbing side. Note it uses conductor_length_m, so the return
+        path is counted here and nowhere else has to remember to.
+        """
+        return (CONDUCTOR_DENSITY_KG_PER_M3 * self.area_m2
+                * self.conductor_length_m)
+
+    # ------------------------------------------------------------- 6 >>> YOURS
     @classmethod
     def size_for_loss_budget(cls, power_w: float, voltage_v: float,
                              length_m: float, loss_fraction: float) -> float:
@@ -301,11 +340,123 @@ class DCBus:
     nominal_voltage_v: float
     feeders: list = dataclasses.field(default_factory=list)
 
-    # ------------------------------------------------------------------ 5 ---
+    # --------------------------------------------------------- 5 — plumbing
     def total_loss_w(self, power_by_feeder: dict, temperature_k: float) -> float:
-        """Sum loss_w over feeders; a feeder absent from the dict carries 0 W."""
-        raise NotImplementedError("T01 method 5a")
+        """Sum loss over feeders; a feeder absent from the dict carries 0 W.
+
+        Absent means idle, not an error: on a given tick most feeders carry
+        nothing, and requiring every one to appear would make the caller
+        build a full dict of zeros each time.
+
+        @note Calls Feeder.loss_w, so this raises NotImplementedError until
+            T01 method 3b lands. That is deliberate — the plumbing is
+            finished and waiting on the physics, not silently returning 0.0.
+        """
+        return sum(
+            feeder.loss_w(power_by_feeder.get(feeder.name, 0.0),
+                          feeder.nominal_voltage_v, temperature_k)
+            for feeder in self.feeders
+        )
 
     def total_conductor_mass_kg(self) -> float:
-        """Sum conductor_mass_kg over feeders."""
-        raise NotImplementedError("T01 method 5b")
+        """Sum conductor mass over feeders. The number a lander cares about."""
+        return sum(feeder.conductor_mass_kg() for feeder in self.feeders)
+
+    def feeder(self, name: str):
+        """Look a feeder up by name; KeyError if it is not on this bus."""
+        for candidate in self.feeders:
+            if candidate.name == name:
+                return candidate
+        raise KeyError(f"no feeder named {name!r} on bus {self.name!r}")
+
+
+# =============================================================================
+# The outpost's actual wiring — plumbing, mine.
+# =============================================================================
+# Physical layout. Every distance is a guess with a reason, and every reason is
+# a geometry constraint rather than an electrical one:
+#
+#   PV array      50 m   clear of habitat shadowing, and far enough that
+#                        habitat traffic does not re-deposit dust on it
+#   Battery       10 m   adjacent to the habitat; short runs are cheap and it
+#                        is the highest-current asset on the bus
+#   RFC           20 m   standoff for stored hydrogen and oxygen
+#   ECLSS          5 m   inside the habitat
+#   Thermal       10 m   radiators on the habitat exterior
+#   Comms         30 m   high-gain antenna clear of structure
+#   Science       60 m   field instruments, the longest user-bus run
+#   Reactor     1000 m   NOT a layout choice — the FSP separation requirement
+#
+# The user bus holds every run under the 100 m ISPSIS limit. The reactor is
+# 10x outside it, which is precisely why it needs its own voltage level.
+
+USER_BUS_LAYOUT = [
+    # (name,             length_m, peak_w)
+    ("PV Array",             50.0,  34_900.0),
+    ("Battery Bank",         10.0,  50_000.0),
+    ("Regenerative Fuel Cell", 20.0, 25_000.0),
+    ("Environmental Control and Life Support System", 5.0, 6_500.0),
+    ("Thermal Control",      10.0,   5_500.0),
+    ("Communications Array", 30.0,   2_500.0),
+    ("Science Payload",      60.0,   6_000.0),
+]
+
+# PROVISIONAL conductor area, used so the topology can be built and inspected
+# before T01's sizing method exists. Once size_for_loss_budget lands, call
+# build_topology(sized=True) and these are replaced by computed values.
+PROVISIONAL_AREA_M2 = 1.0e-5      # 10 mm^2
+
+
+def build_topology(sized: bool = False,
+                   loss_fraction: float = MAX_FEEDER_LOSS_FRACTION):
+    """Construct the outpost's buses and feeders.
+
+    @param  sized  False uses PROVISIONAL_AREA_M2 everywhere, so the topology
+                   is inspectable before the sizing method exists. True sizes
+                   every feeder from its peak power via
+                   Feeder.size_for_loss_budget — which raises until T01
+                   method 6 is implemented.
+    @return (user_bus, transmission_bus)
+
+    @note This is the ONLY place feeder geometry is named, the same way
+        main.build_outpost is the only place concrete assets are named. A
+        figure or a metric should read the topology, never restate it.
+    """
+    def area(power_w, length_m, voltage_v):
+        if not sized:
+            return PROVISIONAL_AREA_M2
+        return Feeder.size_for_loss_budget(power_w, voltage_v, length_m,
+                                           loss_fraction)
+
+    user = DCBus(name="user", nominal_voltage_v=USER_BUS_VOLTAGE_V, feeders=[
+        Feeder(name=name,
+               length_m=length_m,
+               area_m2=area(peak_w, length_m, USER_BUS_VOLTAGE_V),
+               nominal_voltage_v=USER_BUS_VOLTAGE_V)
+        for name, length_m, peak_w in USER_BUS_LAYOUT
+    ])
+
+    transmission = DCBus(
+        name="transmission",
+        nominal_voltage_v=TRANSMISSION_VOLTAGE_V,
+        feeders=[Feeder(
+            name="Fission Surface Power",
+            length_m=FSP_SEPARATION_M,
+            area_m2=area(FSP_RATED_POWER_W, FSP_SEPARATION_M,
+                         TRANSMISSION_VOLTAGE_V),
+            nominal_voltage_v=TRANSMISSION_VOLTAGE_V,
+        )],
+    )
+    return user, transmission
+
+
+def over_span_limit(bus) -> list:
+    """Feeders on a 120 VDC bus that exceed the ISPSIS 100 m limitation.
+
+    Returns names, so a caller can report them rather than just assert. On the
+    nominal layout this is empty for the user bus and would be non-empty the
+    moment someone moved an asset out past the limit without changing voltage.
+    """
+    if bus.nominal_voltage_v > USER_BUS_VOLTAGE_V:
+        return []
+    return [f.name for f in bus.feeders if f.length_m > USER_BUS_MAX_SPAN_M]
