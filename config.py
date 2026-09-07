@@ -229,3 +229,30 @@ CONVERTER_EFFICIENCY: float = 0.95
 # and by how many 160 V devices you are willing to stack. 1000 V is a
 # placeholder that keeps the topology constructible until that work is done.
 TRANSMISSION_VOLTAGE_V: float = 1000.0
+
+
+# --- Protection (T04) --------------------------------------------------------
+# DC has no natural current zero, so a mechanical breaker has nothing to help
+# it extinguish the arc. Spacecraft practice is the Solid State Power
+# Controller (SSPC) — the ISS distributes through RPCMs, and NASA's AMPS
+# switchgear module is the modern equivalent at 0.5 kg against the ISS RPCM's
+# 4.7 kg. An SSPC forces the current to zero by switching, in microseconds.
+
+# A typical SSPC protection curve has three regions: a no-trip region below
+# the rating, an I^2t region for overload, and an instantaneous region for
+# short circuits. Instantaneous thresholds run up to about 10x rated current.
+SSPC_INSTANTANEOUS_TRIP_MULTIPLE: float = 10.0
+
+# Solid-state switching acts in microseconds, which is what makes it viable
+# where a mechanical contact would weld shut.
+SSPC_MIN_TRIP_TIME_S: float = 50e-6
+
+# Let-through energy the device and its cable can absorb before damage. An
+# SSPC protects on ENERGY, not merely on current — a breaker trips when the
+# current reaches a threshold, an SSPC when enough has passed through.
+SSPC_I2T_RATING_A2S: float = 2000.0
+
+# Selectivity margin: a downstream device must clear this much sooner than the
+# one above it, or a feeder fault takes out the whole bus. NASA calls the goal
+# "zonal protection" — the breaker nearest the fault trips and nothing else.
+PROTECTION_COORDINATION_MARGIN_S: float = 1e-4

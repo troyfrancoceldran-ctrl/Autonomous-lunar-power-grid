@@ -76,10 +76,29 @@ exists. Both are in the README roadmap.
             link silently contributed 0.0 W while totals looked plausible;
             D-04 surplus dispatch offered devices power the bus could not
             deliver, and the clamp hid a 1.625e+03 W residual.
-      - [ ] **T03** converters — converter efficiency as distinct from device
-            efficiency.
-      - [ ] **T04** protection — fault current, ratings, zonal coordination,
-            DC arc interruption.
+      - [x] **T03** `converters.py` — DONE 2026-09-07 (Claude). Opt-in behind
+            `--converters`, separately from `--topology`, so the two losses
+            can be attributed rather than lumped.
+            RESULT: the silicon costs MORE than the copper. Converters alone
+            lose 9.79 % of generation against conductors' 8.56 %, and cost 14x
+            the unserved energy (142.1 vs 10.3 kWh). Together 18.10 %, and
+            155.5 kWh unserved on a run with no outage.
+            Also: adding converters LOWERS conductor loss (2587.9 -> 2518.1
+            kWh) because a converter throttles what its feeder carries.
+            Nothing was double-counted: PV_EFFICIENCY is a cell figure, the
+            battery's 0.95 is electrochemical, the RFC's 0.55 is stack
+            chemistry — none includes power electronics.
+      - [~] **T04** `protection.py` — spec + plumbing + tests by Claude
+            2026-09-07; the ENGINEERING IS THE USER'S (their choice, taken in
+            preference to T03). 4 plumbing tests pass, 17 skip across four
+            methods: prospective_fault_current_a, trip_time_s,
+            let_through_energy_a2s, is_selective.
+            Grounded numbers already in the module docstring: the battery
+            feeder's prospective fault is 36.6 kA, EIGHTY-EIGHT times its
+            417 A rating. The reactor has the LOWEST fault current at the
+            HIGHEST voltage — a kilometre of thin aluminium is its own
+            protection. And the T02 temperature finding INVERTS: losses are
+            worst hot, fault current worst COLD, a 6.3x swing either way.
       Architecture settled from NASA sources: a 120 VDC user bus (ISPSIS,
       100 m limit) carrying every asset EXCEPT the reactor, which must sit
       >= 1 km away for NUCLEAR reasons and therefore needs a boost/transmit/

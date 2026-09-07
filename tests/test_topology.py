@@ -359,8 +359,8 @@ def test_every_asset_is_bound_to_a_feeder():
     """
     bus = build_outpost(LunarEnvironment(), None, topology=True)
     assets = ({s.name for s in bus.sources}
-              | {d.name for d in bus.storage}
-              | {l.name for l in bus.loads})
+            | {d.name for d in bus.storage}
+            | {l.name for l in bus.loads})
     feeders = set(bus._feeders)
     assert assets - feeders == set(), "asset with no feeder (loss reads 0.0 W)"
     assert feeders - assets == set(), "feeder bound to no asset"
@@ -375,7 +375,7 @@ def test_conservation_identity_holds_with_topology(wired_history):
     """
     worst = max(abs((r["generation_w"] + r["discharged_w"])
                     - (r["served_w"] + r["charged_w"] + r["curtailed_w"]
-                       + r["losses_w"]))
+                    + r["losses_w"]))
                 for r in wired_history)
     assert worst < 1e-6, f"worst residual {worst:.3e} W"
 

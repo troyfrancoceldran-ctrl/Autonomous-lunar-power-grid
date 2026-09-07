@@ -263,7 +263,7 @@ class PowerBus:
     """One tick of outpost operation, and the accounting that proves it balanced."""
 
     def __init__(self, sources, storage, loads, controller, environment,
-                 buses=None):
+                 buses=None, converters=None):
         """Hold references to every asset; order of `storage` is merit order.
 
         @param buses  Optional iterable of topology.DCBus. Omit it and every
@@ -278,6 +278,42 @@ class PowerBus:
         self.environment = environment
         self.buses = list(buses) if buses else []
         self._feeders = {f.name: f for bus in self.buses for f in bus.feeders}
+        self.converters = dict(converters) if converters else {}
+
+    def _supply_to_bus(self, name: str, asset_power_w: float,
+                       temperature_k: float):
+        """Asset supplies asset_power_w; what reaches the bus, and the losses.
+
+        @return (bus_power_w, converter_loss_w, feeder_loss_w)
+        @note Converter first, feeder second. The converter sits at the asset
+            end and presents bus voltage, so the feeder carries CONVERTED
+            power — sizing the feeder for the raw asset output would size it
+            for a voltage that exists nowhere.
+        """
+        converter = self.converters.get(name)
+        after_converter_w = (converter.delivered_w(asset_power_w)
+                            if converter else asset_power_w)
+        converter_loss_w = asset_power_w - after_converter_w
+        feeder_loss_w = self._feeder_loss_w(name, after_converter_w,
+                                            temperature_k)
+        return after_converter_w - feeder_loss_w, converter_loss_w, feeder_loss_w
+
+    def _draw_from_bus(self, name: str, asset_power_w: float,
+                       temperature_k: float):
+        """Asset needs asset_power_w; what the bus must send, and the losses.
+
+        @return (bus_power_w, converter_loss_w, feeder_loss_w)
+        @note Multiply on the way out, DIVIDE on the way in. The same
+            asymmetry as the battery round trip, and getting it backwards
+            turns a converter into a source of power.
+        """
+        converter = self.converters.get(name)
+        before_converter_w = (converter.drawn_w(asset_power_w)
+                            if converter else asset_power_w)
+        converter_loss_w = before_converter_w - asset_power_w
+        feeder_loss_w = self._feeder_loss_w(name, before_converter_w,
+                                            temperature_k)
+        return before_converter_w + feeder_loss_w, converter_loss_w, feeder_loss_w
 
     def _feeder_loss_w(self, name: str, power_w: float,
                        temperature_k: float) -> float:
@@ -313,65 +349,81 @@ class PowerBus:
         return generation_w + self.storage_power_ceiling_w(dt_hours) - demand_w
 
     def _dispatch_surplus(self, surplus_w: float, dt_hours: float,
-                          loss_fn=None):
-        """Charge in merit order; (absorbed_w, curtailed_w, flows, loss_w).
+                          temperature_k: float):
+        """Charge in merit order.
 
-        The bus must send `accepted + loss` for `accepted` to reach the
-        device, so the feeder cut comes out of the surplus alongside what the
-        device actually stored.
+        @return (absorbed_w, curtailed_w, flows, converter_loss_w, feeder_loss_w)
+
+        `absorbed_w` is ASSET-side: what the devices actually stored. The bus
+        spent that plus both losses, which is why the device may only be
+        offered what survives the trip.
         """
         remaining_w = surplus_w
         absorbed_w = 0.0
-        feeder_loss_w = 0.0
+        converter_loss_w = feeder_loss_w = 0.0
         flows = {}
         for device in self.storage:
-            # Offer only what would SURVIVE the feeder. Offering the full
-            # remaining surplus lets the device accept power the bus cannot
-            # actually deliver, and the accounting then has to clamp at zero
-            # — which silently breaks the conservation identity. Measured
-            # residual before this line existed: 1.625e+03 W.
-            deliverable_w = remaining_w - (loss_fn(device.name, remaining_w)
-                                        if loss_fn else 0.0)
-            accepted_w = device.charge(max(0.0, deliverable_w), dt_hours)
-            loss_w = loss_fn(device.name, accepted_w) if loss_fn else 0.0
+            # What could reach this device if the bus spent everything left?
+            # One correction pass: estimate on the converter alone, then knock
+            # off the feeder loss that estimate implies. Offering the raw
+            # remainder would let the device accept power that does not exist
+            # — defect D-04.
+            converter = self.converters.get(device.name)
+            eta = converter.efficiency if converter else 1.0
+            rough_w = remaining_w * eta
+            trial_cost_w, _, trial_feeder_w = self._draw_from_bus(
+                device.name, rough_w, temperature_k)
+            offer_w = max(0.0, (remaining_w - trial_feeder_w) * eta)
+
+            accepted_w = device.charge(offer_w, dt_hours)
+            cost_w, conv_loss, feed_loss = self._draw_from_bus(
+                device.name, accepted_w, temperature_k)
+
             flows[device.name] = accepted_w
             absorbed_w += accepted_w
-            feeder_loss_w += loss_w
-            remaining_w = remaining_w - accepted_w - loss_w
-        return absorbed_w, remaining_w, flows, feeder_loss_w
+            converter_loss_w += conv_loss
+            feeder_loss_w += feed_loss
+            remaining_w = remaining_w - cost_w
+        return (absorbed_w, remaining_w, flows,
+                converter_loss_w, feeder_loss_w)
 
     def _dispatch_deficit(self, deficit_w: float, dt_hours: float,
-                          loss_fn=None):
-        """Discharge in merit order; (delivered_w, shortfall_w, flows, loss_w).
+                          temperature_k: float):
+        """Discharge in merit order.
 
-        A device supplying `supplied` puts only `supplied - loss` onto the
-        bus, so the deficit falls by the delivered figure and any difference
-        survives as shortfall. That is why storage feeder loss needs no
-        iteration: it simply makes the discharge less effective.
+        @return (delivered_w, shortfall_w, flows, converter_loss_w, feeder_loss_w)
+
+        `delivered_w` is ASSET-side: what the devices gave up. Less than that
+        reaches the bus, so the deficit falls by the arriving figure and the
+        difference survives as shortfall. No iteration needed — losses simply
+        make a discharge less effective.
         """
         remaining_w = deficit_w
         delivered_w = 0.0
-        feeder_loss_w = 0.0
+        converter_loss_w = feeder_loss_w = 0.0
         flows = {}
         for device in self.storage:
             supplied_w = device.discharge(remaining_w, dt_hours)
-            loss_w = loss_fn(device.name, supplied_w) if loss_fn else 0.0
+            arrived_w, conv_loss, feed_loss = self._supply_to_bus(
+                device.name, supplied_w, temperature_k)
+
             flows[device.name] = -supplied_w        # signed: out of the device
             delivered_w += supplied_w
-            feeder_loss_w += loss_w
-            remaining_w = max(0.0, remaining_w - (supplied_w - loss_w))
-        return delivered_w, remaining_w, flows, feeder_loss_w
+            converter_loss_w += conv_loss
+            feeder_loss_w += feed_loss
+            remaining_w = max(0.0, remaining_w - arrived_w)
+        return (delivered_w, remaining_w, flows,
+                converter_loss_w, feeder_loss_w)
 
     def step(self, t_hours: float, dt_hours: float = TIME_STEP_HOURS) -> dict:
         """Advance one tick: measure, decide, re-measure, dispatch, record."""
         is_daylight = self.environment.is_daylight(t_hours)
         cable_k = cable_temperature_k(is_daylight)
 
-        # 1. MEASURE — at the BUS, which is where the controller lives.
-        #    A source's nameplate is measured at ITS terminals; what the bus
-        #    can actually spend is that minus the feeder cut. Handing the
-        #    controller terminal figures would let it promise power that
-        #    never arrives.
+        # 1. MEASURE — at the BUS. A source's nameplate is measured at ITS
+        #    terminals; what the bus can spend is that minus the converter and
+        #    the feeder. Handing the controller terminal figures would let it
+        #    promise power that never arrives.
         soc = self.aggregate_soc
         ceiling_w = self.storage_power_ceiling_w(dt_hours)
 
@@ -379,47 +431,63 @@ class PowerBus:
                                                             self.environment)
                         for source in self.sources}
         generation_w = sum(gen_by_source.values())
-        gen_loss_w = sum(self._feeder_loss_w(name, power, cable_k)
-                        for name, power in gen_by_source.items())
-        generation_bus_w = generation_w - gen_loss_w
+        generation_bus_w = gen_conv_loss_w = gen_feed_loss_w = 0.0
+        for name, power_w in gen_by_source.items():
+            bus_w, conv_w, feed_w = self._supply_to_bus(name, power_w, cable_k)
+            generation_bus_w += bus_w
+            gen_conv_loss_w += conv_w
+            gen_feed_loss_w += feed_w
 
-        connected_w = sum(load.effective_demand(t_hours) for load in self.loads)
-        connected_loss_w = sum(
-            self._feeder_loss_w(load.name, load.effective_demand(t_hours),
-                                cable_k)
-            for load in self.loads)
-        headroom_w = (generation_bus_w + ceiling_w
-                    - (connected_w + connected_loss_w))
+        def demand_at_bus():
+            """(bus_w, converter_loss, feeder_loss) for the loads as they stand."""
+            total = conv = feed = 0.0
+            for load in self.loads:
+                bus_w, c, f = self._draw_from_bus(
+                    load.name, load.effective_demand(t_hours), cable_k)
+                total += bus_w
+                conv += c
+                feed += f
+            return total, conv, feed
+
+        connected_bus_w, _, _ = demand_at_bus()
+        headroom_w = generation_bus_w + ceiling_w - connected_bus_w
 
         # 2. DECIDE — on signals measured a moment ago, never remembered.
         action = self.controller.update(t_hours, soc, self.loads, headroom_w)
 
-        # 3. RE-MEASURE — the controller may have shed or restored a load.
-        #    A load costs the bus its demand PLUS its feeder loss, so shedding
-        #    one saves slightly more than its nameplate.
+        # 3. RE-MEASURE — the controller may have shed or restored a load. A
+        #    load costs the bus its demand PLUS both losses, so shedding one
+        #    saves slightly more than its nameplate.
         demand_w = sum(load.effective_demand(t_hours) for load in self.loads)
-        load_loss_w = sum(
-            self._feeder_loss_w(load.name, load.effective_demand(t_hours),
-                                cable_k)
-            for load in self.loads)
-        demand_bus_w = demand_w + load_loss_w
+        demand_bus_w, load_conv_loss_w, load_feed_loss_w = demand_at_bus()
         net_w = generation_bus_w - demand_bus_w
 
         # 4. DISPATCH — at most one charge or discharge call per device.
-        def loss_fn(name, power_w):
-            return self._feeder_loss_w(name, power_w, cable_k)
-
         charged_w = discharged_w = curtailed_w = shortfall_w = 0.0
-        storage_loss_w = 0.0
+        store_conv_loss_w = store_feed_loss_w = 0.0
         flows = {device.name: 0.0 for device in self.storage}
         if net_w > 0.0:
-            charged_w, curtailed_w, flows, storage_loss_w = (
-                self._dispatch_surplus(net_w, dt_hours, loss_fn))
+            (charged_w, curtailed_w, flows,
+            store_conv_loss_w, store_feed_loss_w) = self._dispatch_surplus(
+                net_w, dt_hours, cable_k)
         elif net_w < 0.0:
-            discharged_w, shortfall_w, flows, storage_loss_w = (
-                self._dispatch_deficit(-net_w, dt_hours, loss_fn))
+            (discharged_w, shortfall_w, flows,
+            store_conv_loss_w, store_feed_loss_w) = self._dispatch_deficit(
+                -net_w, dt_hours, cable_k)
+            # NOTE: shortfall is measured at the BUS, not at the load
+            # terminals. Converting it to a load-side figure means dividing by
+            # a converter and a feeder that the missing power never passed
+            # through, and the arithmetic is only approximate — a first
+            # attempt scaled it by demand_w / demand_bus_w and broke the
+            # conservation identity by 60.9 W. An exact bus-side number that
+            # slightly overstates what the loads lost is worth more than an
+            # approximate load-side one that stops the books balancing.
 
-        losses_w = gen_loss_w + load_loss_w + storage_loss_w
+        converter_loss_w = (gen_conv_loss_w + load_conv_loss_w
+                            + store_conv_loss_w)
+        feeder_loss_w = (gen_feed_loss_w + load_feed_loss_w
+                        + store_feed_loss_w)
+        losses_w = converter_loss_w + feeder_loss_w
 
         # 5. RECORD
         record = {
@@ -438,14 +506,16 @@ class PowerBus:
             "storage_ceiling_w": ceiling_w,
             "action": None if action is None else action.name,
             "n_shed": sum(1 for load in self.loads if load.shed),
-            # --- topology. All zero when no buses are wired, which keeps the
-            #     pre-T02 results reproducible rather than silently revised.
+            # --- electrical layer. All zero when nothing is wired, which
+            #     keeps every earlier result reproducible rather than revised.
             "cable_temperature_k": cable_k,
             "generation_bus_w": generation_bus_w,
             "demand_bus_w": demand_bus_w,
-            "gen_loss_w": gen_loss_w,
-            "load_loss_w": load_loss_w,
-            "storage_loss_w": storage_loss_w,
+            "gen_loss_w": gen_feed_loss_w,
+            "load_loss_w": load_feed_loss_w,
+            "storage_loss_w": store_feed_loss_w,
+            "feeder_loss_w": feeder_loss_w,
+            "converter_loss_w": converter_loss_w,
             "losses_w": losses_w,
         }
         for source in self.sources:

@@ -60,11 +60,9 @@ WORK ORDERS
     T01  this file  Feeder and DCBus.
     T02  power_bus  DONE. Feeders wired into the tick; the conservation
                     identity gained a loss term and still closes, to 7e-12 W.
-    T03  converters Converter efficiency as a thing distinct from device
-                    efficiency. Every asset gains one; the RFC currently
-                    hides its power electronics inside its round trip.
-    T04  protection Fault current, device ratings, zonal coordination, and
-                    the DC arc-interruption problem.
+    T03  converters DONE. See converters.py — the silicon turned out to cost
+                    more than the copper.
+    T04  protection SPEC'D, see protection.py. The engineering is the user's.
 
 --------------------------------------------------------------------------------
 THE MATHS

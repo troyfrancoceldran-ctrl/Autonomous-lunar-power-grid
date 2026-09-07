@@ -77,6 +77,7 @@ is the contingency:
 | `--report` | the full KPI report — reliability, failure mode, storage duty, dawn margins |
 | `--figures` | render four figures, light and dark, into `data/figures/` |
 | `--topology` | model feeder resistance and conductor loss |
+| `--converters` | model power-electronics efficiency per asset |
 | `--export` | write the 1440-row history as CSV and JSON |
 
 Everything together:
@@ -92,7 +93,7 @@ Everything together:
 ### Tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -q        # 258 tests, ~3.9 s
+.venv/bin/python -m pytest tests/ -q        # 283 tests, ~3.9 s
 .venv/bin/python tests/mutation_check.py    # reintroduces 9 real bugs, ~2 min
 ```
 
@@ -314,20 +315,32 @@ cannot render hardware you have not specified.
 asset, and the reactor a kilometre away behind a 1000 V link, with every feeder
 sized to a 5 % loss budget. It changes the answer.
 
-| Nominal 60-day run | Power balance only | With topology |
-|---|---|---|
-| generated | 30225.6 kWh | 30225.6 kWh |
-| served | 20898.5 kWh | 20463.2 kWh |
-| **unserved** | **0.0 kWh** | **10.3 kWh** |
-| curtailed | 8254.5 kWh | 6048.6 kWh |
-| conductor loss | — | **2587.9 kWh (8.56 %)** |
+| Nominal 60-day run | Power balance | `--topology` | `--converters` | both |
+|---|---|---|---|---|
+| served | 20898.5 kWh | 20463.3 kWh | 19646.5 kWh | 19293.6 kWh |
+| **unserved** | **0.0 kWh** | **10.3 kWh** | **142.1 kWh** | **155.5 kWh** |
+| curtailed | 8254.5 kWh | 6048.6 kWh | 6459.2 kWh | 4275.5 kWh |
+| conductor loss | — | 2587.9 kWh | — | 2518.1 kWh |
+| converter loss | — | — | 2959.7 kWh | 2952.3 kWh |
+| total lost | — | 8.56 % | 9.79 % | **18.10 %** |
 
 **The outpost that never failed now fails, with no outage at all.** Ten
 kilowatt-hours is not much, but it is the difference between a system that
 meets its load and one that does not, and it was invisible while the model had
 no conductors in it.
 
-Three things fall out.
+**And the silicon costs more than the copper.** Converters alone lose 9.79 %
+against the conductors' 8.56 %, and cost **fourteen times** the unserved
+energy — 142.1 kWh against 10.3. Copper is visible, gets drawn on diagrams and
+attracts the attention; the power electronics are a box on a wall and cost
+more. Nothing in the device efficiencies already covered them: `PV_EFFICIENCY`
+is a cell figure, the battery's 0.95 is electrochemical, and the fuel cell's
+0.55 is stack chemistry producing a low unregulated voltage that needs the
+largest converter in the outpost.
+
+Together they lose **18.1 % of everything generated**.
+
+Three more things fall out.
 
 **The cable is worst when the Sun is up.** A conductor on the regolith runs
 near 400 K in daylight and 100 K at night — a 6.28× swing in resistance. Losses
@@ -359,22 +372,28 @@ mass: sized to the same budget, that reactor link needs 10.6 mm² of aluminium,
 while running it at 120 V instead would need 736 mm² and **3975 kg** — a
 busbar, not a cable. NASA's "limitation of 120 VDC" priced in metal.
 
-The conservation identity absorbed the change rather than being weakened by it:
+**Adding a loss can lower another loss.** Conductor loss *falls* from
+2587.9 to 2518.1 kWh when converters are switched on, because a converter
+throttles what its feeder carries — the PV array's output reaches the bus
+reduced by η, so the outpost's largest feeder runs at lower current and burns
+less. Loss mechanisms do not simply add.
+
+The conservation identity absorbed both changes rather than being weakened:
 
 ```
 generation + discharged == served + charged + curtailed + losses
 ```
 
-Worst residual over 1440 ticks: **7.276e-12 W**. Losses are another
+Worst residual over 1440 ticks, in all four modes: **1.455e-11 W**. Losses are another
 destination for watts, not an excuse for the books not to balance. Omitting
-`--topology` reproduces the earlier results exactly, so nothing published
+either flag reproduces the earlier results exactly, so nothing published
 before this is silently revised.
 
 ---
 
 ## Testing
 
-258 tests in about four seconds. They are organised by
+283 tests in about four seconds. They are organised by
 **failure mode**, not by
 module, because every real bug this project shipped survived a passing test:
 
@@ -458,8 +477,10 @@ simulation_engine.py      time-marching loop, CSV/JSON export
 metrics.py                reliability and failure-mode KPIs
 visualization.py          four figures, light and dark themes
 topology.py               buses, feeders, conductor sizing, losses
+converters.py             power electronics, distinct from the device
+protection.py             SSPC trip curves, fault current  [T04, in progress]
 main.py                   entry point and the outpost parts list
-tests/                    258 tests + INVARIANTS.md + mutation_check.py
+tests/                    283 tests + INVARIANTS.md + mutation_check.py
                           + palette_check.py (figure legibility, measured)
 docs/                     compliance inspection, figures
 data/                     run outputs (gitignored)

@@ -73,15 +73,17 @@ from environment import LunarEnvironment
 from power_bus import PowerBus
 from simulation_engine import SimulationEngine
 from topology import build_topology
+from converters import build_converters
 from assets.generation import PVArray, FissionSurfacePower
 from assets.loads import ECLSS, ThermalControl, CommsArray, SciencePayload
 from assets.storage import BatteryBank, RegenerativeFuelCell
 
 
 def build_outpost(environment, outage_start_hours=None,
-                  topology: bool = False) -> PowerBus:
+                  topology: bool = False,
+                  converters: bool = False) -> PowerBus:
     """Assemble the standard outpost; storage order IS the merit order."""
-    return PowerBus(
+    bus = PowerBus(
         sources=[
             PVArray(),
             FissionSurfacePower(outage_start_hours=outage_start_hours,
@@ -101,15 +103,21 @@ def build_outpost(environment, outage_start_hours=None,
         environment=environment,
         buses=build_topology(sized=True) if topology else None,
     )
+    if converters:
+        # Built FROM the assembled bus, never from a list restated here, so an
+        # asset added above cannot end up without power electronics. Defect
+        # D-03 was exactly that failure in the feeder binding.
+        bus.converters = build_converters(bus)
+    return bus
 
 
 def run_scenario(name: str, outage_start_hours=None, export: bool = False,
                 report: bool = False, figures: bool = False,
-                topology: bool = False):
+                topology: bool = False, converters: bool = False):
     """Build a fresh outpost, run it, print a summary; returns the engine."""
     environment = LunarEnvironment()
     engine = SimulationEngine(
-        build_outpost(environment, outage_start_hours, topology))
+        build_outpost(environment, outage_start_hours, topology, converters))
     engine.run()
 
     s = engine.summary()
@@ -122,10 +130,16 @@ def run_scenario(name: str, outage_start_hours=None, export: bool = False,
     print(f"  {'min aggregate SoC':<20}{s['min_aggregate_soc']:>12.4f}")
     print(f"  {'min headroom':<20}{s['min_headroom_w'] / 1000:>12.2f} kW")
     print(f"  {'controller actions':<20}{s['actions']:>12}")
-    if topology:
-        loss_kwh = sum(r["losses_w"] for r in engine.history) / 1000.0
-        print(f"  {'conductor loss':<20}{loss_kwh:>12.1f} kWh"
-              f"  ({100 * loss_kwh / s['generated_kwh']:.2f} % of generation)")
+    if topology or converters:
+        feeder_kwh = sum(r["feeder_loss_w"] for r in engine.history) / 1000.0
+        conv_kwh = sum(r["converter_loss_w"] for r in engine.history) / 1000.0
+        gen_kwh = s["generated_kwh"]
+        if topology:
+            print(f"  {'conductor loss':<20}{feeder_kwh:>12.1f} kWh"
+                  f"  ({100 * feeder_kwh / gen_kwh:.2f} % of generation)")
+        if converters:
+            print(f"  {'converter loss':<20}{conv_kwh:>12.1f} kWh"
+                  f"  ({100 * conv_kwh / gen_kwh:.2f} % of generation)")
 
     slug = "".join(ch if ch.isalnum() else "_" for ch in name.lower()).strip("_")
 
@@ -157,6 +171,8 @@ if __name__ == "__main__":
                         help="print the full KPI report from metrics.py")
     parser.add_argument("--topology", action="store_true",
                         help="model feeder resistance and conductor losses")
+    parser.add_argument("--converters", action="store_true",
+                        help="model power-electronics efficiency per asset")
     parser.add_argument("--figures", action="store_true",
                         help="render the four figures into data/figures/")
     args = parser.parse_args()
@@ -165,4 +181,4 @@ if __name__ == "__main__":
             else f"FSP outage at t={args.outage:.0f} h")
     run_scenario(label, outage_start_hours=args.outage, export=args.export,
                 report=args.report, figures=args.figures,
-                 topology=args.topology)
+                 topology=args.topology, converters=args.converters)
