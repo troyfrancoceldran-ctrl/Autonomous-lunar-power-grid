@@ -34,7 +34,10 @@ The mechanism is the two-tier storage. The battery is efficient and fast
 deep but slow — 2090 kWh of deliverable energy behind a **12 kW** stack. So the
 fleet can hold plenty of energy and still be unable to deliver it fast enough:
 
-![Energy reserve against power headroom](docs/figures/two_signals.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/two_signals_dark.png">
+  <img alt="Energy reserve against power headroom" src="docs/figures/two_signals.png">
+</picture>
 
 Top panel: the signal a conventional controller watches. Bottom: the one this
 project adds. The red line is unserved power. It lands where the top panel
@@ -72,7 +75,7 @@ is the contingency:
 | *(none)* | nominal run, summary only |
 | `--outage HOURS` | scripted 24 h reactor outage starting at that hour |
 | `--report` | the full KPI report — reliability, failure mode, storage duty, dawn margins |
-| `--figures` | render four PNGs into `data/figures/` |
+| `--figures` | render four figures, light and dark, into `data/figures/` |
 | `--export` | write the 1440-row history as CSV and JSON |
 
 Everything together:
@@ -88,7 +91,7 @@ Everything together:
 ### Tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -q        # 188 tests, ~0.4 s
+.venv/bin/python -m pytest tests/ -q        # 218 tests, ~2 s
 .venv/bin/python tests/mutation_check.py    # reintroduces 9 real bugs, ~2 min
 ```
 
@@ -176,7 +179,10 @@ finite switching lifetimes.
 
 ## What is modelled
 
-![Power balance](docs/figures/power_balance.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/power_balance_dark.png">
+  <img alt="Power balance" src="docs/figures/power_balance.png">
+</picture>
 
 | | Value | Note |
 |---|---|---|
@@ -194,7 +200,10 @@ period of 29.53 days. The shorthand understates the night by 5.1 %, and NASA's
 Fission Surface Power requirement is written against the real figure:
 *"capability for at least 354 hr of nighttime energy storage."*
 
-![Storage reserves](docs/figures/reserves.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/reserves_dark.png">
+  <img alt="Storage reserves" src="docs/figures/reserves.png">
+</picture>
 
 The two-tier split, visible: the battery (orange) crashes to its floor within
 about 36 hours of nightfall and stays there; the fuel cell (green) carries the
@@ -300,7 +309,7 @@ cannot render hardware you have not specified.
 
 ## Testing
 
-188 tests in about 0.4 seconds. They are organised by **failure mode**, not by
+218 tests in about two seconds. They are organised by **failure mode**, not by
 module, because every real bug this project shipped survived a passing test:
 
 | | Catches |
@@ -326,7 +335,44 @@ one because every module here carries a Doxygen header that quotes its own
 implementation as pseudocode, so a naive find-and-replace rewrote the
 *documentation* and left the code untouched.
 
-![Load shedding timeline](docs/figures/shed_timeline.png)
+### The figures are measured too
+
+The palette shipped through Step 12 described itself as "a validated
+categorical palette". Nothing had validated it. When it was finally measured,
+it failed on four counts:
+
+| | Measured | Floor |
+|---|---|---|
+| amber `#eda100` contrast on the surface | **2.11:1** | 3.0:1 |
+| green `#1baf7a` contrast on the surface | **2.74:1** | 3.0:1 |
+| orange vs amber, deuteranopia | **ΔE 9.6** | 18 |
+| red vs orange, tritanopia | **ΔE 10.6** | 18 |
+
+The root cause was hue choice, not tuning. Orange, amber and red are three
+warm hues, and deuteranopia collapses them onto one axis — no lightness
+adjustment separates all three. The docstring's defence, that only *adjacent*
+slots needed to be separable, did not survive contact with its own figures:
+the shed timeline put all four slots on one axis, and the two-signal figure
+put the reserved red directly against slot 1.
+
+`tests/palette_check.py` replaces the claim with a measurement — WCAG 2.2
+SC 1.4.11 contrast, and CIEDE2000 separation under normal vision plus
+protanopia, deuteranopia and tritanopia simulated with Machado et al. (2009).
+The checker is itself checked against the CIEDE2000 standard's published test
+data before it is trusted to judge anything.
+
+Two consequences worth stating. The palette now needs only **three**
+categorical slots, because no figure ever identified more than three series by
+colour — the fourth existed solely for the shed timeline, where the row labels
+already carry the identity. And both themes were chosen by a search that
+*satisfices* at the floor and then optimises for a conventional appearance,
+which is why a measured palette still looks like an ordinary blue/orange/green
+chart rather than an accessibility demo.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/shed_timeline_dark.png">
+  <img alt="Load shedding timeline" src="docs/figures/shed_timeline.png">
+</picture>
 
 ---
 
@@ -344,9 +390,10 @@ controller.py             ControlStrategy interface + AutonomousController
 power_bus.py              per-tick energy balance
 simulation_engine.py      time-marching loop, CSV/JSON export
 metrics.py                reliability and failure-mode KPIs
-visualization.py          four figures
+visualization.py          four figures, light and dark themes
 main.py                   entry point and the outpost parts list
-tests/                    188 tests + INVARIANTS.md + mutation_check.py
+tests/                    218 tests + INVARIANTS.md + mutation_check.py
+                          + palette_check.py (figure legibility, measured)
 docs/                     compliance inspection, figures
 data/                     run outputs (gitignored)
 ```

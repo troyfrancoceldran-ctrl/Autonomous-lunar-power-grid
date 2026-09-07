@@ -3,7 +3,7 @@
 @brief   Figures: what the history LOOKS like.
 @author  Troy Celdran
 @author  JARVIS (Claude Opus 5) — co-author
-@date    2026-09-04
+@date    2026-09-07
 
 @details
 Four figures, each answering one question. Like metrics.py these are pure
@@ -16,12 +16,48 @@ a figure can be redrawn from an exported CSV with the simulation gone.
     4  The two signals    energy reserve against power headroom — the figure
                         this project exists to produce
 
-@note PALETTE. Colours are assigned by fixed slot order from a validated
-    categorical palette, never picked for resemblance (the PV array is blue,
-    not yellow). The order is the colour-blind-safety mechanism: adjacent
-    slots are guaranteed separable, so reordering them to "look right" breaks
-    the guarantee. Series identity is never carried by colour alone — every
-    figure legends and direct-labels its series.
+Every figure renders in two themes. `make_all` writes both, and the README
+serves them with <picture> + prefers-color-scheme, so a reader on a dark
+GitHub never gets a white rectangle burned into the page.
+
+@note DEFECT D-02 — the palette shipped through Step 12 failed the claim its
+    own docstring made. It was described as a "validated categorical palette"
+    with "adjacent slots guaranteed separable", but nothing measured it. When
+    finally measured (2026-09-07, `tests/palette_check.py`):
+
+        amber  #eda100  contrast 2.11:1 against the surface   (floor 3.0)
+        green  #1baf7a  contrast 2.74:1                       (floor 3.0)
+        orange vs amber  CIEDE2000 9.6 under deuteranopia     (floor 15)
+        red    vs orange CIEDE2000 10.6 under tritanopia      (floor 15)
+
+    Two defences in the old docstring did not survive contact with the code.
+    "Adjacent slots" was irrelevant: shed_timeline put all four slots on one
+    axis and two_signals put the reserved red directly against slot 1. And
+    figure_reserves drew the 2.74:1 green as a 2 pt line — a thin graphical
+    object, exactly what WCAG 1.4.11 is about.
+
+    The root cause was not tuning but HUE CHOICE. Orange, amber and red are
+    three warm hues; deuteranopia collapses them onto one axis, so no amount
+    of lightness adjustment separates all three. A palette search over
+    in-gamut CIELCh confirmed both that the old set was unfixable in place
+    and that passing sets exist.
+
+@note PALETTE. Colours are assigned by fixed slot order and the assignment is
+    MEASURED, not asserted — `tests/palette_check.py` is the proof and
+    `test_visualization.py` runs it. The floors are WCAG 2.2 SC 1.4.11
+    (>= 3.0:1 for a meaningful graphical object) and CIEDE2000 >= 18 between
+    every pair that shares an axis, evaluated under normal vision plus
+    protanopia, deuteranopia and tritanopia simulated with Machado, Oliveira
+    & Fernandes (2009) at severity 1.0.
+
+    THREE categorical slots, not four. No figure ever identifies more than
+    three series by colour. The old fourth slot existed only for
+    shed_timeline, where the row labels already carry the identity — so
+    colour there was redundant encoding that cost a palette constraint and
+    bought nothing. Those bars are now one neutral tone.
+
+    Series identity is never carried by colour alone: every figure legends
+    and direct-labels its series.
 
 @note ONE AXIS PER FIGURE, always. No figure here plots two different units
     against left and right scales. Where two quantities of different scale
@@ -34,15 +70,37 @@ a figure can be redrawn from an exported CSV with the simulation gone.
 
 @see metrics.py for the numbers these draw.
 @see power_bus.py for the RECORD SCHEMA they read.
+@see tests/palette_check.py for the measurement behind every colour here.
 
 
 ================================================================================
 API
 ================================================================================
 
-SURFACE / INK / SERIES                                              [constants]
-    Palette slots, light mode. SERIES is the fixed assignment order; index
-    into it positionally rather than choosing by name.
+Theme                                                               [dataclass]
+    One coherent set of colour tokens. Two are defined: LIGHT and DARK.
+
+    @param  name       'light' or 'dark'; used in output filenames.
+    @param  surface    Figure and axes background.
+    @param  ink        Primary text and the demand line.
+    @param  ink_soft   Secondary text, tick labels, threshold lines.
+    @param  ink_faint  Grid lines and spines.
+    @param  night      Lunar-night shading band.
+    @param  muted      Large neutral fills (curtailment).
+    @param  bar        Shed-timeline bars; one tone, identity is the row label.
+    @param  series     Three categorical slots, in assignment order.
+    @param  critical   RESERVED status colour. Never used as a series slot.
+
+THEME                                                                [variable]
+    The theme in force. Read at call time, so `use_theme` affects any figure
+    drawn inside the block. Module-level state is the idiom matplotlib
+    already uses; `use_theme` restores on exit, including on exception.
+
+use_theme(theme)                                            [context manager]
+    Draw inside this block with `theme` in force.
+
+        with use_theme(DARK):
+            figure_reserves(history, "reserves_dark.png")
 
 figure_power_balance(history, path=None) -> Figure
     Stacked supply against demand, with curtailment and shortfall called out.
@@ -52,7 +110,7 @@ figure_power_balance(history, path=None) -> Figure
 
     @note Supply STACKS because the components sum to something meaningful —
         total power delivered to the bus. Demand is a line over the top, not
-        a fifth stack layer: it is the target the stack is trying to reach,
+        a fourth stack layer: it is the target the stack is trying to reach,
         and drawing it as another band would imply it adds to supply.
     @note Curtailment is drawn BELOW the axis as a negative band. It is
         generated power that was thrown away, so showing it above zero would
@@ -75,6 +133,9 @@ figure_shed_timeline(history, path=None) -> Figure
         bottom: the least important load sheds first and restores last. ECLSS
         occupies a row that should never contain a bar — an empty row is the
         result, not a missing series.
+    @note ONE colour for every bar. The row label is the identity; colouring
+        the bars differently would imply the colour encodes something it does
+        not, and it used to cost the palette a fourth constraint for nothing.
 
 figure_two_signals(history, path=None) -> Figure
     Two stacked panels: energy reserve above, power headroom below.
@@ -88,28 +149,85 @@ figure_two_signals(history, path=None) -> Figure
         collapsing to the RFC's rating while the battery sits at its floor is
         the mechanism behind every power-limited hour.
 
-make_all(history, outdir="data/figures") -> list[str]
-    Render all four and return the paths written.
+make_all(history, outdir="data/figures", themes=None) -> list[str]
+    Render every figure in every theme and return the paths written.
+
+    @note Dark files are suffixed `_dark`; light files keep the bare name, so
+        existing README links and anything pointing at the old filenames
+        continue to resolve.
 """
+
+import contextlib
+import dataclasses
 
 import matplotlib
 matplotlib.use("Agg")                    # no display needed; write files
 import matplotlib.pyplot as plt          # noqa: E402
 
-from config import SOC_SHED_THRESHOLD, SOC_RESTORE_THRESHOLD, LoadPriority
-from metrics import series_names, timestep_hours
+from config import SOC_SHED_THRESHOLD, SOC_RESTORE_THRESHOLD  # noqa: E402
+from metrics import series_names, timestep_hours              # noqa: E402
 
-# Validated categorical palette, light mode. Assign in this order, never cycle.
-SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
-# Status colours are RESERVED and never reused as a series slot. Kept visually
-# distinct from the categorical hues so a status cannot impersonate a series,
-# and always shipped with a label rather than leaning on hue alone.
-CRITICAL = "#d03b3b"
-SURFACE = "#fcfcfb"
-INK = "#0b0b0b"
-INK_SOFT = "#52514e"
-INK_FAINT = "#c9c8c2"
-NIGHT = "#eceae5"
+
+@dataclasses.dataclass(frozen=True)
+class Theme:
+    """One coherent set of colour tokens; see the API note above."""
+    name: str
+    surface: str
+    ink: str
+    ink_soft: str
+    ink_faint: str
+    night: str
+    muted: str
+    bar: str
+    series: tuple
+    critical: str
+
+
+# Both palettes are the output of a search over in-gamut CIELCh, satisficing
+# at the CIEDE2000 floor and then optimising for a conventional appearance —
+# which is why they look like an ordinary blue/orange/green/red chart despite
+# being chosen by measurement. tests/palette_check.py re-derives the numbers.
+LIGHT = Theme(
+    name="light",
+    surface="#fcfcfb",
+    ink="#0b0b0b",
+    ink_soft="#52514e",
+    ink_faint="#c9c8c2",
+    night="#eceae5",
+    muted="#c9c8c2",
+    bar="#5b6470",
+    series=("#1963a4", "#d67510", "#2ba07e"),
+    critical="#b13328",
+)
+
+DARK = Theme(
+    name="dark",
+    surface="#14161a",
+    ink="#f2f3f5",
+    ink_soft="#9aa2ad",
+    ink_faint="#333944",
+    night="#1c1f26",
+    muted="#454c58",
+    bar="#8892a0",
+    series=("#207db6", "#fea12d", "#3ec69d"),
+    critical="#e22e31",
+)
+
+THEMES = {"light": LIGHT, "dark": DARK}
+
+THEME = LIGHT
+
+
+@contextlib.contextmanager
+def use_theme(theme):
+    """Draw with `theme` in force; restore on exit, including on exception."""
+    global THEME
+    previous = THEME
+    THEME = theme
+    try:
+        yield theme
+    finally:
+        THEME = previous
 
 
 def _legend(ax, ncol):
@@ -121,7 +239,7 @@ def _legend(ax, ncol):
     frame is the only placement that cannot collide.
     """
     ax.legend(loc="lower left", bbox_to_anchor=(0.0, 1.0), ncol=ncol,
-            frameon=False, fontsize=8, labelcolor=INK_SOFT,
+            frameon=False, fontsize=8, labelcolor=THEME.ink_soft,
             handlelength=1.6, columnspacing=1.6, borderaxespad=0.2)
 
 
@@ -135,18 +253,18 @@ def _short(name):
 
 def _style(ax, title, ylabel, xlabel="hours since lunar dawn", pad=26):
     """Recessive grid and axes; ink tokens for all text."""
-    ax.set_facecolor(SURFACE)
-    ax.set_title(title, color=INK, fontsize=11, loc="left", pad=pad)
-    ax.set_ylabel(ylabel, color=INK_SOFT, fontsize=9)
+    ax.set_facecolor(THEME.surface)
+    ax.set_title(title, color=THEME.ink, fontsize=11, loc="left", pad=pad)
+    ax.set_ylabel(ylabel, color=THEME.ink_soft, fontsize=9)
     if xlabel:
-        ax.set_xlabel(xlabel, color=INK_SOFT, fontsize=9)
-    ax.tick_params(colors=INK_SOFT, labelsize=8)
-    ax.grid(True, color=INK_FAINT, linewidth=0.6, alpha=0.6)
+        ax.set_xlabel(xlabel, color=THEME.ink_soft, fontsize=9)
+    ax.tick_params(colors=THEME.ink_soft, labelsize=8)
+    ax.grid(True, color=THEME.ink_faint, linewidth=0.6, alpha=0.6)
     ax.set_axisbelow(True)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
     for side in ("left", "bottom"):
-        ax.spines[side].set_color(INK_FAINT)
+        ax.spines[side].set_color(THEME.ink_faint)
 
 
 def _shade_night(ax, history):
@@ -157,23 +275,23 @@ def _shade_night(ax, history):
         if not record["is_daylight"] and start is None:
             start = record["t_hours"]
         elif record["is_daylight"] and start is not None:
-            ax.axvspan(start, record["t_hours"], color=NIGHT, zorder=0)
+            ax.axvspan(start, record["t_hours"], color=THEME.night, zorder=0)
             start = None
     if start is not None:
-        ax.axvspan(start, history[-1]["t_hours"] + dt, color=NIGHT, zorder=0)
+        ax.axvspan(start, history[-1]["t_hours"] + dt, color=THEME.night, zorder=0)
 
 
 def _figure(nrows=1, height=4.0):
     """A themed figure with the chart surface applied."""
     fig, axes = plt.subplots(nrows, 1, figsize=(11, height), sharex=(nrows > 1))
-    fig.patch.set_facecolor(SURFACE)
+    fig.patch.set_facecolor(THEME.surface)
     return fig, axes
 
 
 def _save(fig, path):
     """Write the figure if a path was given; return it either way."""
     if path:
-        fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=SURFACE)
+        fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=THEME.surface)
     return fig
 
 
@@ -188,12 +306,13 @@ def figure_power_balance(history, path=None):
     fig, ax = _figure(height=4.2)
     _shade_night(ax, history)
     ax.stackplot(t, *bands, labels=labels,
-                colors=SERIES[:len(bands)], edgecolor=SURFACE, linewidth=0.3)
+                colors=THEME.series[:len(bands)],
+                edgecolor=THEME.surface, linewidth=0.3)
     ax.plot(t, [r["demand_w"] / 1000 for r in history],
-            color=INK, linewidth=1.6, label="Demand (after shedding)")
+            color=THEME.ink, linewidth=1.6, label="Demand (after shedding)")
     ax.fill_between(t, 0, [-r["curtailed_w"] / 1000 for r in history],
-                    color=INK_FAINT, label="Curtailed")
-    ax.axhline(0, color=INK_FAINT, linewidth=1.0)
+                    color=THEME.muted, label="Curtailed")
+    ax.axhline(0, color=THEME.ink_faint, linewidth=1.0)
 
     _style(ax, "Power balance — supply stacked against demand", "power  [kW]", pad=30)
     _legend(ax, 5)
@@ -211,16 +330,18 @@ def figure_reserves(history, path=None):
     fig, ax = _figure(height=4.2)
     _shade_night(ax, history)
     ax.axhspan(SOC_SHED_THRESHOLD, SOC_RESTORE_THRESHOLD,
-            color=INK_FAINT, alpha=0.45, zorder=1)
-    ax.axhline(SOC_SHED_THRESHOLD, color=INK_SOFT, linewidth=1.0,
+            color=THEME.ink_faint, alpha=0.45, zorder=1)
+    ax.axhline(SOC_SHED_THRESHOLD, color=THEME.ink_soft, linewidth=1.0,
             linestyle=(0, (4, 3)), zorder=2)
-    ax.axhline(SOC_RESTORE_THRESHOLD, color=INK_SOFT, linewidth=1.0,
+    ax.axhline(SOC_RESTORE_THRESHOLD, color=THEME.ink_soft, linewidth=1.0,
             linestyle=(0, (4, 3)), zorder=2)
     ax.text(t[-1], (SOC_SHED_THRESHOLD + SOC_RESTORE_THRESHOLD) / 2,
-            "  hysteresis\n  dead band", color=INK_SOFT, fontsize=8, va="center")
+            "  hysteresis\n  dead band", color=THEME.ink_soft, fontsize=8,
+            va="center")
 
     for i, (label, values) in enumerate(traces):
-        ax.plot(t, values, color=SERIES[i], linewidth=2.0, label=label, zorder=3)
+        ax.plot(t, values, color=THEME.series[i % len(THEME.series)],
+                linewidth=2.0, label=label, zorder=3)
 
     _style(ax, "Storage reserves — the two-tier split", "state of charge  [-]", pad=30)
     _legend(ax, 3)
@@ -247,15 +368,16 @@ def figure_shed_timeline(history, path=None):
         if start is not None:
             spans.append((start, history[-1]["t_hours"] + dt - start))
         if spans:
+            # One tone for every row: the label is the identity.
             ax.broken_barh(spans, (row - 0.32, 0.64),
-                        facecolors=SERIES[row % len(SERIES)], zorder=3)
+                        facecolors=THEME.bar, zorder=3)
 
     ax.set_yticks(range(len(names)))
     ax.set_yticklabels([_short(n) for n in names], fontsize=8)
     ax.invert_yaxis()
     ax.set_ylim(len(names) - 0.5, -0.5)
     _style(ax, "Load shedding — bars mark hours disconnected", "")
-    ax.grid(True, axis="x", color=INK_FAINT, linewidth=0.6, alpha=0.6)
+    ax.grid(True, axis="x", color=THEME.ink_faint, linewidth=0.6, alpha=0.6)
     ax.grid(False, axis="y")
     ax.set_xlim(history[0]["t_hours"], history[-1]["t_hours"])
     # No legend: the row labels ARE the identity. A colour key here would say
@@ -273,8 +395,8 @@ def figure_two_signals(history, path=None):
         _shade_night(ax, history)
 
     top.plot(t, [r["aggregate_soc"] for r in history],
-            color=SERIES[0], linewidth=2.0, label="Fleet aggregate SoC")
-    top.axhline(SOC_SHED_THRESHOLD, color=INK_SOFT, linewidth=1.0,
+            color=THEME.series[0], linewidth=2.0, label="Fleet aggregate SoC")
+    top.axhline(SOC_SHED_THRESHOLD, color=THEME.ink_soft, linewidth=1.0,
                 linestyle=(0, (4, 3)))
     _style(top, "The energy signal — what a conventional controller watches",
         "state of charge  [-]", xlabel="", pad=30)
@@ -282,14 +404,14 @@ def figure_two_signals(history, path=None):
     top.set_ylim(0, 1.05)
 
     bot.plot(t, [r["storage_ceiling_w"] / 1000 for r in history],
-            color=SERIES[1], linewidth=2.0, label="Fleet discharge ceiling")
+            color=THEME.series[1], linewidth=2.0, label="Fleet discharge ceiling")
     bot.plot(t, [r["headroom_w"] / 1000 for r in history],
-            color=SERIES[0], linewidth=2.0, label="Power headroom")
-    bot.axhline(0, color=INK, linewidth=1.2)
+            color=THEME.series[0], linewidth=2.0, label="Power headroom")
+    bot.axhline(0, color=THEME.ink, linewidth=1.2)
 
     brownouts = [r["t_hours"] for r in history if r["shortfall_w"] > 0]
     for i, t_bad in enumerate(brownouts):
-        bot.axvline(t_bad, color=CRITICAL, linewidth=1.6, zorder=1,
+        bot.axvline(t_bad, color=THEME.critical, linewidth=1.6, zorder=1,
                     label="Unserved power" if i == 0 else None)
 
     _style(bot, "The power signal — what this project added", "power  [kW]", pad=30)
@@ -301,20 +423,26 @@ def figure_two_signals(history, path=None):
     return _save(fig, path)
 
 
-def make_all(history, outdir="data/figures"):
-    """Render all four figures into outdir; returns the paths written."""
+FIGURES = [
+    (figure_power_balance, "power_balance"),
+    (figure_reserves, "reserves"),
+    (figure_shed_timeline, "shed_timeline"),
+    (figure_two_signals, "two_signals"),
+]
+
+
+def make_all(history, outdir="data/figures", themes=None):
+    """Render every figure in every theme into outdir; returns paths written."""
     import os
     os.makedirs(outdir, exist_ok=True)
-    jobs = [
-        (figure_power_balance, "power_balance.png"),
-        (figure_reserves, "reserves.png"),
-        (figure_shed_timeline, "shed_timeline.png"),
-        (figure_two_signals, "two_signals.png"),
-    ]
+    themes = themes or (LIGHT, DARK)
     paths = []
-    for fn, name in jobs:
-        path = os.path.join(outdir, name)
-        fig = fn(history, path)
-        plt.close(fig)
-        paths.append(path)
+    for theme in themes:
+        suffix = "" if theme.name == "light" else f"_{theme.name}"
+        with use_theme(theme):
+            for fn, stem in FIGURES:
+                path = os.path.join(outdir, f"{stem}{suffix}.png")
+                fig = fn(history, path)
+                plt.close(fig)
+                paths.append(path)
     return paths

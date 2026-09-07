@@ -33,7 +33,21 @@ Authors are Troy Celdran with JARVIS (Claude Opus 5) as co-author.
 - [x] Step 10 — `metrics.py` + `visualization.py`: KPIs and plots (Claude). Headline result: on the t=500 h outage, **100 % of shortfall hours were power-limited at aggregate_soc 0.6159** — the two-signal design measured rather than asserted. Also: 27.3 % of generation curtailed, battery at its floor for 554 of 708 night hours.
 - [x] Step 11 — `tests/`: 188 tests in 0.4 s, organised by failure mode rather than by module (Claude — reassigned mid-session at the user's request). Plus `tests/mutation_check.py`, which reintroduces nine shipped bugs and confirms 8 are caught; the 9th is a verified equivalent mutant. Seven measurement errors were made writing it, against zero code defects found.
 - [x] Step 12 (part 1) — README rewritten around the result, `--report`/`--figures` flags wired into `main.py`, MIT LICENSE, figures committed to `docs/figures/`, pre-publication audit run (Claude)
-- [ ] Step 12 (part 2) — push to a new public GitHub repo. NEEDS the user's explicit go-ahead, a repo name, and a decision on the commit-author email (see below).
+- [x] Step 12 (part 2) — published. Public repo `Autonomous-lunar-power-grid`
+      at github.com/troyfrancoceldran-ctrl, 40 commits, MIT. All commits
+      rewritten to a GitHub noreply author before the first push, so the
+      university address never left the machine. Roadmap added in `1c82dbf`.
+
+- [x] Dual-theme figures + defect D-02 (Claude, 2026-09-07). The palette that
+      shipped through Step 12 called itself "validated" and was not: amber at
+      2.11:1 and green at 2.74:1 against the surface (floor 3.0), orange vs
+      amber ΔE 9.6 under deuteranopia and red vs orange ΔE 10.6 under
+      tritanopia (floor 18). Root cause was HUE CHOICE — three warm hues
+      collapse onto one axis under deuteranopia, so no tuning fixes it.
+      `tests/palette_check.py` now measures both themes; it is itself verified
+      against the CIEDE2000 standard's published test data. The palette needs
+      only THREE slots: no figure identified more than three series by colour.
+      218 tests.
 
 ## Next cycle — week of 2026-09-08
 Two upgrades, taken together because the second is more useful once the first
