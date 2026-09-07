@@ -72,12 +72,14 @@ from controller import AutonomousController
 from environment import LunarEnvironment
 from power_bus import PowerBus
 from simulation_engine import SimulationEngine
+from topology import build_topology
 from assets.generation import PVArray, FissionSurfacePower
 from assets.loads import ECLSS, ThermalControl, CommsArray, SciencePayload
 from assets.storage import BatteryBank, RegenerativeFuelCell
 
 
-def build_outpost(environment, outage_start_hours=None) -> PowerBus:
+def build_outpost(environment, outage_start_hours=None,
+                  topology: bool = False) -> PowerBus:
     """Assemble the standard outpost; storage order IS the merit order."""
     return PowerBus(
         sources=[
@@ -97,14 +99,17 @@ def build_outpost(environment, outage_start_hours=None) -> PowerBus:
         ],
         controller=AutonomousController(),
         environment=environment,
+        buses=build_topology(sized=True) if topology else None,
     )
 
 
 def run_scenario(name: str, outage_start_hours=None, export: bool = False,
-                report: bool = False, figures: bool = False):
+                report: bool = False, figures: bool = False,
+                topology: bool = False):
     """Build a fresh outpost, run it, print a summary; returns the engine."""
     environment = LunarEnvironment()
-    engine = SimulationEngine(build_outpost(environment, outage_start_hours))
+    engine = SimulationEngine(
+        build_outpost(environment, outage_start_hours, topology))
     engine.run()
 
     s = engine.summary()
@@ -117,6 +122,10 @@ def run_scenario(name: str, outage_start_hours=None, export: bool = False,
     print(f"  {'min aggregate SoC':<20}{s['min_aggregate_soc']:>12.4f}")
     print(f"  {'min headroom':<20}{s['min_headroom_w'] / 1000:>12.2f} kW")
     print(f"  {'controller actions':<20}{s['actions']:>12}")
+    if topology:
+        loss_kwh = sum(r["losses_w"] for r in engine.history) / 1000.0
+        print(f"  {'conductor loss':<20}{loss_kwh:>12.1f} kWh"
+              f"  ({100 * loss_kwh / s['generated_kwh']:.2f} % of generation)")
 
     slug = "".join(ch if ch.isalnum() else "_" for ch in name.lower()).strip("_")
 
@@ -146,6 +155,8 @@ if __name__ == "__main__":
                         help="write the run history to data/ as CSV and JSON")
     parser.add_argument("--report", action="store_true",
                         help="print the full KPI report from metrics.py")
+    parser.add_argument("--topology", action="store_true",
+                        help="model feeder resistance and conductor losses")
     parser.add_argument("--figures", action="store_true",
                         help="render the four figures into data/figures/")
     args = parser.parse_args()
@@ -153,4 +164,5 @@ if __name__ == "__main__":
     label = ("nominal" if args.outage is None
             else f"FSP outage at t={args.outage:.0f} h")
     run_scenario(label, outage_start_hours=args.outage, export=args.export,
-                report=args.report, figures=args.figures)
+                report=args.report, figures=args.figures,
+                 topology=args.topology)

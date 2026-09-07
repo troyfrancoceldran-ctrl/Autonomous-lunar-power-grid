@@ -76,6 +76,7 @@ is the contingency:
 | `--outage HOURS` | scripted 24 h reactor outage starting at that hour |
 | `--report` | the full KPI report — reliability, failure mode, storage duty, dawn margins |
 | `--figures` | render four figures, light and dark, into `data/figures/` |
+| `--topology` | model feeder resistance and conductor loss |
 | `--export` | write the 1440-row history as CSV and JSON |
 
 Everything together:
@@ -91,7 +92,7 @@ Everything together:
 ### Tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -q        # 249 tests, ~3.5 s
+.venv/bin/python -m pytest tests/ -q        # 258 tests, ~3.9 s
 .venv/bin/python tests/mutation_check.py    # reintroduces 9 real bugs, ~2 min
 ```
 
@@ -307,9 +308,73 @@ cannot render hardware you have not specified.
 
 ---
 
+## The wire is not free
+
+`--topology` adds the electrical layout: a 120 VDC user bus carrying every
+asset, and the reactor a kilometre away behind a 1000 V link, with every feeder
+sized to a 5 % loss budget. It changes the answer.
+
+| Nominal 60-day run | Power balance only | With topology |
+|---|---|---|
+| generated | 30225.6 kWh | 30225.6 kWh |
+| served | 20898.5 kWh | 20463.2 kWh |
+| **unserved** | **0.0 kWh** | **10.3 kWh** |
+| curtailed | 8254.5 kWh | 6048.6 kWh |
+| conductor loss | — | **2587.9 kWh (8.56 %)** |
+
+**The outpost that never failed now fails, with no outage at all.** Ten
+kilowatt-hours is not much, but it is the difference between a system that
+meets its load and one that does not, and it was invisible while the model had
+no conductors in it.
+
+Three things fall out.
+
+**The cable is worst when the Sun is up.** A conductor on the regolith runs
+near 400 K in daylight and 100 K at night — a 6.28× swing in resistance. Losses
+are **10.36 % of generation in daylight against 2.69 % at night**, as a
+fraction, so this is not merely that more power flows by day. A feeder sized at
+the reference temperature loses about 7.1 % at noon against its 5 % budget.
+
+**Per-feeder budgets do not compose.** Eight feeders each sized to 5 % do not
+give a 5 % system; they give 8.56 %. The budget belongs to the outpost, not to
+each run, and sizing feeder by feeder quietly spends it eight times.
+
+**Distance is not the cost — voltage is.** Where the copper actually goes:
+
+```
+PV Array                                        883.8 kWh    50 m at  120 V
+FSP Reactor                                     602.9 kWh  1000 m at 1000 V
+Environmental Control and Life Support System   391.9 kWh     5 m at  120 V
+Thermal Control                                 284.1 kWh
+Regenerative Fuel Cell                          208.0 kWh
+Science Payload                                 160.9 kWh
+Communications Array                             48.6 kWh
+Battery Bank                                      7.6 kWh
+```
+
+The PV feeder runs 50 m and loses **more** than the reactor link running 1 km.
+Twenty times the distance, less loss, because one runs at 1000 V and the other
+at the 120 V the interoperability standard requires. The same comparison in
+mass: sized to the same budget, that reactor link needs 10.6 mm² of aluminium,
+while running it at 120 V instead would need 736 mm² and **3975 kg** — a
+busbar, not a cable. NASA's "limitation of 120 VDC" priced in metal.
+
+The conservation identity absorbed the change rather than being weakened by it:
+
+```
+generation + discharged == served + charged + curtailed + losses
+```
+
+Worst residual over 1440 ticks: **7.276e-12 W**. Losses are another
+destination for watts, not an excuse for the books not to balance. Omitting
+`--topology` reproduces the earlier results exactly, so nothing published
+before this is silently revised.
+
+---
+
 ## Testing
 
-249 tests in about three and a half seconds. They are organised by
+258 tests in about four seconds. They are organised by
 **failure mode**, not by
 module, because every real bug this project shipped survived a passing test:
 
@@ -392,9 +457,9 @@ power_bus.py              per-tick energy balance
 simulation_engine.py      time-marching loop, CSV/JSON export
 metrics.py                reliability and failure-mode KPIs
 visualization.py          four figures, light and dark themes
-topology.py               buses, feeders, conductor sizing
+topology.py               buses, feeders, conductor sizing, losses
 main.py                   entry point and the outpost parts list
-tests/                    249 tests + INVARIANTS.md + mutation_check.py
+tests/                    258 tests + INVARIANTS.md + mutation_check.py
                           + palette_check.py (figure legibility, measured)
 docs/                     compliance inspection, figures
 data/                     run outputs (gitignored)

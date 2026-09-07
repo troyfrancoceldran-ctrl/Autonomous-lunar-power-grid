@@ -54,15 +54,28 @@ Two upgrades, taken together because the second is more useful once the first
 exists. Both are in the README roadmap.
 - [ ] **Electrical topology** — split into four work orders, spec in
       `topology.py`'s module docstring, constants in `config.py`.
-      - [~] **T01** `topology.py` — SPLIT 2026-09-07. Plumbing done by Claude
+      - [x] **T01** `topology.py` — SPLIT 2026-09-07. Plumbing done by Claude
             (dataclasses, conductor_mass_kg, DCBus aggregation,
             build_topology, 26 tests). Electrical core is the USER's:
             resistance_ohm, current_a, voltage_drop_v, loss_w,
             size_for_loss_budget. Tests for those SKIP until each method
             lands, so the suite stays green — `pytest -rs` prints the
             remaining work as a skip list. 12 pass, 14 skipped.
-      - [ ] **T02** `power_bus.py` — wire feeders into the tick; the
-            conservation identity gains loss terms. (Claude)
+      - [x] **T02** `power_bus.py` — DONE 2026-09-07 (Claude). Feeders wired
+            into the tick; identity extended to `generation + discharged ==
+            served + charged + curtailed + losses` and still closes, worst
+            residual 7.276e-12 W. Opt-in via `--topology`, so every result
+            published before T02 stays reproducible.
+            RESULT: the nominal run goes from 0.0 to 10.3 kWh unserved with
+            NO outage — conductor loss alone (8.56 % of generation) is enough
+            to make the outpost miss its load. Daylight 10.36 % vs night
+            2.69 % as a fraction of generation. Eight feeders each sized to a
+            5 % budget compose to 8.56 %, not 5 %.
+            Two defects, both found only by running it: D-03 the reactor
+            feeder was bound by a name build_outpost never used, so a 1 km
+            link silently contributed 0.0 W while totals looked plausible;
+            D-04 surplus dispatch offered devices power the bus could not
+            deliver, and the clamp hid a 1.625e+03 W residual.
       - [ ] **T03** converters — converter efficiency as distinct from device
             efficiency.
       - [ ] **T04** protection — fault current, ratings, zonal coordination,

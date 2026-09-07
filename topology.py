@@ -58,8 +58,8 @@ stacked-DC route stays tractable, which is the case modelled here.
 WORK ORDERS
 --------------------------------------------------------------------------------
     T01  this file  Feeder and DCBus.
-    T02  power_bus  Wire feeders into the tick. The conservation identity
-                    gains loss terms and stops closing at exactly zero.
+    T02  power_bus  DONE. Feeders wired into the tick; the conservation
+                    identity gained a loss term and still closes, to 7e-12 W.
     T03  converters Converter efficiency as a thing distinct from device
                     efficiency. Every asset gains one; the RFC currently
                     hides its power electronics inside its round trip.
@@ -364,6 +364,11 @@ class DCBus:
 #   Science       60 m   field instruments, the longest user-bus run
 #   Reactor     1000 m   NOT a layout choice — the FSP separation requirement
 #
+# NAMES MUST MATCH main.build_outpost EXACTLY. A feeder is bound to its asset
+# by name, and a mismatch is silent: the asset simply gets no feeder and its
+# loss reads 0.0 W forever. That is how the reactor link sat unused through the
+# first T02 run while every figure and total looked plausible.
+#
 # The user bus holds every run under the 100 m ISPSIS limit. The reactor is
 # 10x outside it, which is precisely why it needs its own voltage level.
 
@@ -417,7 +422,7 @@ def build_topology(sized: bool = False,
         name="transmission",
         nominal_voltage_v=TRANSMISSION_VOLTAGE_V,
         feeders=[Feeder(
-            name="Fission Surface Power",
+            name="FSP Reactor",
             length_m=FSP_SEPARATION_M,
             area_m2=area(FSP_RATED_POWER_W, FSP_SEPARATION_M,
                         TRANSMISSION_VOLTAGE_V),

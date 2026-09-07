@@ -81,6 +81,40 @@ One tick of outpost operation, and the accounting that proves it balanced.
 @var controller   ControlStrategy; the only object permitted to shed a load.
 @var environment  LunarEnvironment, passed through to every source.
 
+@note CONSERVATION, extended by T02. The identity was
+
+        generation + discharged == served + charged + curtailed
+
+    and is now
+
+        generation + discharged == served + charged + curtailed + losses
+
+    Losses do not excuse the books from balancing; a watt burned in a
+    conductor is simply another destination. Measured worst residual over
+    1440 ticks: 0.000e+00 W with no topology, 7.276e-12 W with it.
+
+    Generation is measured at the SOURCE TERMINALS and demand at the LOAD
+    TERMINALS, while the controller sees bus-side figures — generation minus
+    its feeder cut, demand plus its own. Handing the controller terminal
+    numbers would let it promise power that never arrives.
+
+@note TWO DEFECTS T02 shipped, both invisible until a full run was measured:
+
+    D-03  The reactor's feeder was named 'Fission Surface Power' while
+        build_outpost calls the asset 'FSP Reactor'. Binding by name fails
+        SILENTLY — the asset simply has no feeder and reports 0.0 W, so a
+        1 km transmission run contributed nothing while every total still
+        looked plausible. The layout test did not catch it because it
+        compared build_topology's literals against literals of my own
+        writing. test_every_asset_is_bound_to_a_feeder now compares against
+        the assembled outpost.
+
+    D-04  _dispatch_surplus offered a device the whole remaining surplus
+        when the bus could only deliver that minus the feeder cut, so the
+        device accepted power that did not exist. The accounting clamped at
+        zero to hide it and the conservation residual reached 1.625e+03 W.
+        The device is now offered only what survives the feeder.
+
 @note The bus is STATELESS between ticks. All mutable state lives in the
     storage devices, the loads' shed flags and the controller's dwell memory.
     Every signal handed to the controller is measured fresh.
@@ -222,18 +256,40 @@ CONSERVATION IDENTITY
 """
 
 from config import TIME_STEP_HOURS
+from topology import cable_temperature_k
 
 
 class PowerBus:
     """One tick of outpost operation, and the accounting that proves it balanced."""
 
-    def __init__(self, sources, storage, loads, controller, environment):
-        """Hold references to every asset; order of `storage` is merit order."""
+    def __init__(self, sources, storage, loads, controller, environment,
+                 buses=None):
+        """Hold references to every asset; order of `storage` is merit order.
+
+        @param buses  Optional iterable of topology.DCBus. Omit it and every
+            feeder loss is zero, which is the model as it stood before T02 —
+            so the pre-topology results remain reproducible rather than being
+            overwritten by a change of physics.
+        """
         self.sources = list(sources)
         self.storage = list(storage)
         self.loads = list(loads)
         self.controller = controller
         self.environment = environment
+        self.buses = list(buses) if buses else []
+        self._feeders = {f.name: f for bus in self.buses for f in bus.feeders}
+
+    def _feeder_loss_w(self, name: str, power_w: float,
+                       temperature_k: float) -> float:
+        """Loss in the feeder serving `name`; 0.0 with no topology wired.
+
+        An asset with no feeder is treated as sitting on the bus itself,
+        which is the honest reading of a topology that does not mention it.
+        """
+        feeder = self._feeders.get(name)
+        if feeder is None or power_w <= 0.0:
+            return 0.0
+        return feeder.loss_w(power_w, feeder.nominal_voltage_v, temperature_k)
 
     @property
     def aggregate_soc(self) -> float:
@@ -256,59 +312,119 @@ class PowerBus:
         demand_w = sum(load.effective_demand(t_hours) for load in self.loads)
         return generation_w + self.storage_power_ceiling_w(dt_hours) - demand_w
 
-    def _dispatch_surplus(self, surplus_w: float, dt_hours: float):
-        """Charge in merit order; returns (absorbed_w, curtailed_w, flows)."""
+    def _dispatch_surplus(self, surplus_w: float, dt_hours: float,
+                          loss_fn=None):
+        """Charge in merit order; (absorbed_w, curtailed_w, flows, loss_w).
+
+        The bus must send `accepted + loss` for `accepted` to reach the
+        device, so the feeder cut comes out of the surplus alongside what the
+        device actually stored.
+        """
         remaining_w = surplus_w
         absorbed_w = 0.0
+        feeder_loss_w = 0.0
         flows = {}
         for device in self.storage:
-            accepted_w = device.charge(remaining_w, dt_hours)
+            # Offer only what would SURVIVE the feeder. Offering the full
+            # remaining surplus lets the device accept power the bus cannot
+            # actually deliver, and the accounting then has to clamp at zero
+            # — which silently breaks the conservation identity. Measured
+            # residual before this line existed: 1.625e+03 W.
+            deliverable_w = remaining_w - (loss_fn(device.name, remaining_w)
+                                        if loss_fn else 0.0)
+            accepted_w = device.charge(max(0.0, deliverable_w), dt_hours)
+            loss_w = loss_fn(device.name, accepted_w) if loss_fn else 0.0
             flows[device.name] = accepted_w
             absorbed_w += accepted_w
-            remaining_w = max(0.0, remaining_w - accepted_w)
-        return absorbed_w, remaining_w, flows
+            feeder_loss_w += loss_w
+            remaining_w = remaining_w - accepted_w - loss_w
+        return absorbed_w, remaining_w, flows, feeder_loss_w
 
-    def _dispatch_deficit(self, deficit_w: float, dt_hours: float):
-        """Discharge in merit order; returns (delivered_w, shortfall_w, flows)."""
+    def _dispatch_deficit(self, deficit_w: float, dt_hours: float,
+                          loss_fn=None):
+        """Discharge in merit order; (delivered_w, shortfall_w, flows, loss_w).
+
+        A device supplying `supplied` puts only `supplied - loss` onto the
+        bus, so the deficit falls by the delivered figure and any difference
+        survives as shortfall. That is why storage feeder loss needs no
+        iteration: it simply makes the discharge less effective.
+        """
         remaining_w = deficit_w
         delivered_w = 0.0
+        feeder_loss_w = 0.0
         flows = {}
         for device in self.storage:
             supplied_w = device.discharge(remaining_w, dt_hours)
+            loss_w = loss_fn(device.name, supplied_w) if loss_fn else 0.0
             flows[device.name] = -supplied_w        # signed: out of the device
             delivered_w += supplied_w
-            remaining_w = max(0.0, remaining_w - supplied_w)
-        return delivered_w, remaining_w, flows
+            feeder_loss_w += loss_w
+            remaining_w = max(0.0, remaining_w - (supplied_w - loss_w))
+        return delivered_w, remaining_w, flows, feeder_loss_w
 
     def step(self, t_hours: float, dt_hours: float = TIME_STEP_HOURS) -> dict:
         """Advance one tick: measure, decide, re-measure, dispatch, record."""
-        # 1. MEASURE — the tick as it stands, before any decision.
+        is_daylight = self.environment.is_daylight(t_hours)
+        cable_k = cable_temperature_k(is_daylight)
+
+        # 1. MEASURE — at the BUS, which is where the controller lives.
+        #    A source's nameplate is measured at ITS terminals; what the bus
+        #    can actually spend is that minus the feeder cut. Handing the
+        #    controller terminal figures would let it promise power that
+        #    never arrives.
         soc = self.aggregate_soc
         ceiling_w = self.storage_power_ceiling_w(dt_hours)
-        generation_w = sum(source.available_power(t_hours, self.environment)
-                        for source in self.sources)
+
+        gen_by_source = {source.name: source.available_power(t_hours,
+                                                            self.environment)
+                        for source in self.sources}
+        generation_w = sum(gen_by_source.values())
+        gen_loss_w = sum(self._feeder_loss_w(name, power, cable_k)
+                        for name, power in gen_by_source.items())
+        generation_bus_w = generation_w - gen_loss_w
+
         connected_w = sum(load.effective_demand(t_hours) for load in self.loads)
-        headroom_w = generation_w + ceiling_w - connected_w
+        connected_loss_w = sum(
+            self._feeder_loss_w(load.name, load.effective_demand(t_hours),
+                                cable_k)
+            for load in self.loads)
+        headroom_w = (generation_bus_w + ceiling_w
+                    - (connected_w + connected_loss_w))
 
         # 2. DECIDE — on signals measured a moment ago, never remembered.
         action = self.controller.update(t_hours, soc, self.loads, headroom_w)
 
         # 3. RE-MEASURE — the controller may have shed or restored a load.
+        #    A load costs the bus its demand PLUS its feeder loss, so shedding
+        #    one saves slightly more than its nameplate.
         demand_w = sum(load.effective_demand(t_hours) for load in self.loads)
-        net_w = generation_w - demand_w
+        load_loss_w = sum(
+            self._feeder_loss_w(load.name, load.effective_demand(t_hours),
+                                cable_k)
+            for load in self.loads)
+        demand_bus_w = demand_w + load_loss_w
+        net_w = generation_bus_w - demand_bus_w
 
         # 4. DISPATCH — at most one charge or discharge call per device.
+        def loss_fn(name, power_w):
+            return self._feeder_loss_w(name, power_w, cable_k)
+
         charged_w = discharged_w = curtailed_w = shortfall_w = 0.0
+        storage_loss_w = 0.0
         flows = {device.name: 0.0 for device in self.storage}
         if net_w > 0.0:
-            charged_w, curtailed_w, flows = self._dispatch_surplus(net_w, dt_hours)
+            charged_w, curtailed_w, flows, storage_loss_w = (
+                self._dispatch_surplus(net_w, dt_hours, loss_fn))
         elif net_w < 0.0:
-            discharged_w, shortfall_w, flows = self._dispatch_deficit(-net_w, dt_hours)
+            discharged_w, shortfall_w, flows, storage_loss_w = (
+                self._dispatch_deficit(-net_w, dt_hours, loss_fn))
+
+        losses_w = gen_loss_w + load_loss_w + storage_loss_w
 
         # 5. RECORD
         record = {
             "t_hours": t_hours,
-            "is_daylight": self.environment.is_daylight(t_hours),
+            "is_daylight": is_daylight,
             "generation_w": generation_w,
             "demand_w": demand_w,
             "headroom_w": headroom_w,
@@ -322,14 +438,28 @@ class PowerBus:
             "storage_ceiling_w": ceiling_w,
             "action": None if action is None else action.name,
             "n_shed": sum(1 for load in self.loads if load.shed),
+            # --- topology. All zero when no buses are wired, which keeps the
+            #     pre-T02 results reproducible rather than silently revised.
+            "cable_temperature_k": cable_k,
+            "generation_bus_w": generation_bus_w,
+            "demand_bus_w": demand_bus_w,
+            "gen_loss_w": gen_loss_w,
+            "load_loss_w": load_loss_w,
+            "storage_loss_w": storage_loss_w,
+            "losses_w": losses_w,
         }
         for source in self.sources:
-            record[f"gen:{source.name}"] = source.available_power(
-                t_hours, self.environment)
+            record[f"gen:{source.name}"] = gen_by_source[source.name]
+            record[f"floss:{source.name}"] = self._feeder_loss_w(
+                source.name, gen_by_source[source.name], cable_k)
         for device in self.storage:
             record[f"soc:{device.name}"] = device.state_of_charge
             record[f"flow:{device.name}"] = flows[device.name]
+            record[f"floss:{device.name}"] = self._feeder_loss_w(
+                device.name, abs(flows[device.name]), cable_k)
         for load in self.loads:
             record[f"load:{load.name}"] = load.effective_demand(t_hours)
             record[f"shed:{load.name}"] = load.shed
+            record[f"floss:{load.name}"] = self._feeder_loss_w(
+                load.name, load.effective_demand(t_hours), cable_k)
         return record
