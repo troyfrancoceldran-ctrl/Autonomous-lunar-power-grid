@@ -479,10 +479,12 @@ visualization.py          four figures, light and dark themes
 topology.py               buses, feeders, conductor sizing, losses
 converters.py             power electronics, distinct from the device
 protection.py             SSPC trip curves, fault current  [T04, in progress]
+                          maths: docs/protection_formulas.pdf
 main.py                   entry point and the outpost parts list
 tests/                    283 tests + INVARIANTS.md + mutation_check.py
                           + palette_check.py (figure legibility, measured)
-docs/                     compliance inspection, figures
+docs/                     compliance inspection, figures,
+                          protection_formulas.pdf (T04 mathematics)
 data/                     run outputs (gitignored)
 ```
 

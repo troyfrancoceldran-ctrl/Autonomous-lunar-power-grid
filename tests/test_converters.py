@@ -92,7 +92,7 @@ def test_every_asset_gets_a_converter():
     """
     bus = build_outpost(LunarEnvironment(), None, converters=True)
     assets = ({s.name for s in bus.sources} | {d.name for d in bus.storage}
-              | {l.name for l in bus.loads})
+            | {l.name for l in bus.loads})
     assert set(bus.converters) == assets
 
 
@@ -121,7 +121,7 @@ def test_conservation_holds_in_every_mode(runs, mode):
     """
     worst = max(abs((r["generation_w"] + r["discharged_w"])
                     - (r["served_w"] + r["charged_w"] + r["curtailed_w"]
-                       + r["losses_w"]))
+                    + r["losses_w"]))
                 for r in runs[mode].history)
     assert worst < 1e-6, f"{mode}: worst residual {worst:.3e} W"
 

@@ -122,7 +122,7 @@ def test_distance_protects_better_than_voltage_endangers():
     reactor = needs(lambda: prospective_fault_current_a(
         transmission.feeders[0], CABLE_TEMP_NIGHT_K))
     worst_user = max(prospective_fault_current_a(f, CABLE_TEMP_NIGHT_K)
-                     for f in user.feeders)
+                    for f in user.feeders)
     assert transmission.feeders[0].nominal_voltage_v > user.nominal_voltage_v
     assert reactor < worst_user
 
@@ -182,7 +182,7 @@ def test_let_through_is_flat_across_the_i2t_region(device):
     method 2 is wrong.
     """
     values = [needs(lambda c=c: device.let_through_energy_a2s(c))
-              for c in (150.0, 300.0, 600.0, 900.0)]
+            for c in (150.0, 300.0, 600.0, 900.0)]
     for v in values:
         assert v == pytest.approx(SSPC_I2T_RATING_A2S, rel=1e-9)
 

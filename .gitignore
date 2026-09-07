@@ -13,3 +13,7 @@ data/figures/
 
 # docs/figures/ IS committed: the README renders results, so a reader
 # should not have to run the simulation to see what it found.
+
+# PNG previews written beside the formula PDF are a build artifact of
+# docs/make_protection_formulas.py, used to eyeball the PDF before shipping it.
+docs/_formulas_preview_*.png

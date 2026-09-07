@@ -170,7 +170,7 @@ ProtectionDevice                                                    [dataclass]
     @param  rated_current_a       Continuous rating; below this it never trips.
     @param  i2t_rating_a2s        Let-through energy before it fires.
     @param  inst_multiple         Instantaneous threshold, as a multiple of
-                                  the rating.
+                                the rating.
     @param  min_trip_time_s       Physical floor on switching speed.
 
     trip_time_s(current_a) -> float
@@ -233,6 +233,7 @@ class ProtectionDevice:
         instantaneous threshold; i2t_rating / current^2 in between.
         Mind the branch order — see TRAP in the module docstring.
         """
+        
         raise NotImplementedError("T04 method 2")
 
     # ------------------------------------------------------------- 3 >>> YOURS
@@ -287,8 +288,8 @@ def build_protection(buses) -> dict:
 
 
 def feeder_rated_current_a(feeder,
-                           loss_fraction: float = MAX_FEEDER_LOSS_FRACTION
-                           ) -> float:
+                        loss_fraction: float = MAX_FEEDER_LOSS_FRACTION
+                        ) -> float:
     """The continuous current this conductor was sized to carry.
 
     Inverting the T01 sizing rule. Sizing gave

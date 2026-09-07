@@ -18,21 +18,21 @@ This is the whole difficulty of T03: some device efficiencies sound as though
 they already include the electronics, and none of them do.
 
     PV_EFFICIENCY          0.30    CELL efficiency — photons to DC at the
-                                   panel terminals. An MPPT converter still
-                                   has to sit between that and the bus.
+                                panel terminals. An MPPT converter still
+                                has to sit between that and the bus.
     BATTERY_*_EFFICIENCY   0.95    Round-trip ELECTROCHEMICAL loss. A real
-                                   pack is charged and discharged through a
-                                   bidirectional DC-DC unit that is not in it.
+                                pack is charged and discharged through a
+                                bidirectional DC-DC unit that is not in it.
     ELECTROLYZER_EFFICIENCY 0.70   STACK efficiency, chemistry only.
     FUEL_CELL_EFFICIENCY   0.55    STACK efficiency, chemistry only. The fuel
-                                   cell's output is a low, unregulated,
-                                   load-dependent voltage — it needs the
-                                   biggest converter in the outpost, and the
-                                   0.385 round trip hides that completely.
+                                cell's output is a low, unregulated,
+                                load-dependent voltage — it needs the
+                                biggest converter in the outpost, and the
+                                0.385 round trip hides that completely.
     FSP_AVAILABILITY       1.0     Not an efficiency at all. The reactor's
-                                   Stirling convertors already produce AC
-                                   which is rectified to a 300-400 V DC link
-                                   before anything else happens.
+                                Stirling convertors already produce AC
+                                which is rectified to a 300-400 V DC link
+                                before anything else happens.
 
 So adding converters does not double-count: it counts something that was never
 counted. NASA's UMIC rack targets > 95 % at 10 kW, which is where

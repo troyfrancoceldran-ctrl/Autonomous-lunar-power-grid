@@ -106,35 +106,35 @@ WHAT IT MEASURED
 Two results fall out of the numbers above, and neither was put in by hand.
 
 1. THE CABLE IS WORST WHEN THE SUN IS UP. A conductor lying on the regolith
-   runs near 400 K in daylight and 100 K at night, and across that range its
-   resistance varies by 6.28x:
+runs near 400 K in daylight and 100 K at night, and across that range its
+resistance varies by 6.28x:
 
-       day    400.00 K   R 0.7565 ohm    (1.43 x reference)
-       ref    293.15 K   R 0.5300 ohm
-       night  100.00 K   R 0.1205 ohm    (0.23 x reference)
+    day    400.00 K   R 0.7565 ohm    (1.43 x reference)
+    ref    293.15 K   R 0.5300 ohm
+    night  100.00 K   R 0.1205 ohm    (0.23 x reference)
 
-   Because size_for_loss_budget sizes at the REFERENCE temperature, a feeder
-   designed to a 5 % budget actually loses about 7.1 % at noon and 1.1 % at
-   midnight. The sizing temperature is therefore a real design decision, which
-   is why it is made explicitly in the sizing method rather than defaulted.
+Because size_for_loss_budget sizes at the REFERENCE temperature, a feeder
+designed to a 5 % budget actually loses about 7.1 % at noon and 1.1 % at
+midnight. The sizing temperature is therefore a real design decision, which
+is why it is made explicitly in the sizing method rather than defaulted.
 
 2. THE 100 M LIMIT, IN KILOGRAMS. Sizing the 10 kW reactor link over 1 km to
-   a 5 % loss budget:
+a 5 % loss budget:
 
-           120 V    736.11 mm^2    3975.0 kg      <- ISPSIS user-bus voltage
-           500 V     42.40 mm^2     229.0 kg
-          1000 V     10.60 mm^2      57.2 kg
-          1500 V      4.71 mm^2      25.4 kg      <- rad-hardening ceiling
+        120 V    736.11 mm^2    3975.0 kg      <- ISPSIS user-bus voltage
+        500 V     42.40 mm^2     229.0 kg
+        1000 V     10.60 mm^2      57.2 kg
+        1500 V      4.71 mm^2      25.4 kg      <- rad-hardening ceiling
 
-   Running the reactor at user-bus voltage would cost four tonnes of aluminium
-   and would not be a cable but a busbar. This is what NASA's "limitation of
-   120 VDC" means once it is priced. The sharpest comparison in the model is
-   that the PV feeder needs 128 mm^2 to travel 50 m while the reactor link
-   needs 10.6 mm^2 to travel 1000 m — twenty times the distance on a twelfth
-   of the conductor, purely because of voltage.
+Running the reactor at user-bus voltage would cost four tonnes of aluminium
+and would not be a cable but a busbar. This is what NASA's "limitation of
+120 VDC" means once it is priced. The sharpest comparison in the model is
+that the PV feeder needs 128 mm^2 to travel 50 m while the reactor link
+needs 10.6 mm^2 to travel 1000 m — twenty times the distance on a twelfth
+of the conductor, purely because of voltage.
 
-   Sized in full, the outpost carries 107.65 kg of conductor, over half of it
-   in that single reactor run.
+Sized in full, the outpost carries 107.65 kg of conductor, over half of it
+in that single reactor run.
 
 --------------------------------------------------------------------------------
 WHAT THIS DELIBERATELY DOES NOT MODEL YET
@@ -218,7 +218,7 @@ build_topology(sized=False, loss_fraction=MAX_FEEDER_LOSS_FRACTION)
     Construct the outpost's buses and feeders.
 
     @param  sized  False uses PROVISIONAL_AREA_M2; True sizes every feeder
-                   from its peak power via Feeder.size_for_loss_budget.
+                from its peak power via Feeder.size_for_loss_budget.
     @return (user_bus, transmission_bus)
     @note The ONLY place feeder geometry is named, the same way
         main.build_outpost is the only place concrete assets are named.
