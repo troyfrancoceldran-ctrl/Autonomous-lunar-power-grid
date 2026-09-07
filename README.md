@@ -91,7 +91,7 @@ Everything together:
 ### Tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -q        # 230 tests, ~2 s
+.venv/bin/python -m pytest tests/ -q        # 249 tests, ~3.5 s
 .venv/bin/python tests/mutation_check.py    # reintroduces 9 real bugs, ~2 min
 ```
 
@@ -309,7 +309,8 @@ cannot render hardware you have not specified.
 
 ## Testing
 
-230 tests in about two seconds. They are organised by **failure mode**, not by
+249 tests in about three and a half seconds. They are organised by
+**failure mode**, not by
 module, because every real bug this project shipped survived a passing test:
 
 | | Catches |
@@ -391,9 +392,9 @@ power_bus.py              per-tick energy balance
 simulation_engine.py      time-marching loop, CSV/JSON export
 metrics.py                reliability and failure-mode KPIs
 visualization.py          four figures, light and dark themes
-topology.py               buses, feeders, conductor sizing  [in progress]
+topology.py               buses, feeders, conductor sizing
 main.py                   entry point and the outpost parts list
-tests/                    230 tests + INVARIANTS.md + mutation_check.py
+tests/                    249 tests + INVARIANTS.md + mutation_check.py
                           + palette_check.py (figure legibility, measured)
 docs/                     compliance inspection, figures
 data/                     run outputs (gitignored)

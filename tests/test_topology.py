@@ -54,7 +54,7 @@ def needs(call):
 def feeder():
     """A 100 m run of 10 mm^2 aluminium at 120 V."""
     return Feeder(name="test", length_m=100.0, area_m2=1.0e-5,
-                  nominal_voltage_v=120.0)
+                nominal_voltage_v=120.0)
 
 
 # --- plumbing: works now -----------------------------------------------------
@@ -135,7 +135,7 @@ def test_over_span_limit_flags_a_bus_that_outgrew_its_voltage():
 def test_over_span_limit_does_not_apply_above_120v():
     """The 100 m limit belongs to 120 VDC, not to cables in general."""
     hv = DCBus("transmission", 1000.0,
-               [Feeder("long haul", 1000.0, 1e-5, 1000.0)])
+            [Feeder("long haul", 1000.0, 1e-5, 1000.0)])
     assert topology.over_span_limit(hv) == []
 
 
@@ -144,8 +144,8 @@ def test_layout_covers_every_asset_and_load():
     user, transmission = build_topology()
     names = {f.name for f in user.feeders} | {f.name for f in transmission.feeders}
     for expected in ("PV Array", "Battery Bank", "Regenerative Fuel Cell",
-                     "Thermal Control", "Communications Array",
-                     "Science Payload", "Fission Surface Power"):
+                    "Thermal Control", "Communications Array",
+                    "Science Payload", "Fission Surface Power"):
         assert expected in names
 
 
@@ -254,7 +254,7 @@ def test_a_feeder_absent_from_the_dict_is_idle_not_an_error():
     bus = DCBus("user", 120.0, [Feeder("a", 100.0, 1e-5, 120.0),
                                 Feeder("idle", 50.0, 1e-5, 120.0)])
     total = needs(lambda: bus.total_loss_w({"a": 3_000.0},
-                                           CABLE_TEMP_REFERENCE_K))
+                                        CABLE_TEMP_REFERENCE_K))
     only_a = bus.feeder("a").loss_w(3_000.0, 120.0, CABLE_TEMP_REFERENCE_K)
     assert total == pytest.approx(only_a)
 
@@ -271,3 +271,37 @@ def test_sized_topology_is_lighter_where_voltage_is_higher():
     pv = user.feeder("PV Array")
     assert (hv.conductor_mass_kg() / hv.length_m
             < pv.conductor_mass_kg() / pv.length_m)
+
+
+# --- the guard has to reach the methods that need it -------------------------
+# Added after review: the original suite tested the V <= 0 guard on current_a
+# ONLY, so an implementation could satisfy it while voltage_drop_v and loss_w
+# divided by zero on the same input. All three take the same arguments and
+# should agree about what a dead bus means.
+
+@pytest.mark.parametrize("bad_voltage", [0.0, -120.0])
+def test_voltage_drop_guards_non_positive_voltage(feeder, bad_voltage):
+    """No drop across a feeder carrying no current."""
+    assert needs(lambda: feeder.voltage_drop_v(1000.0, bad_voltage,
+                                            CABLE_TEMP_REFERENCE_K)) == 0.0
+
+
+@pytest.mark.parametrize("bad_voltage", [0.0, -120.0])
+def test_loss_guards_non_positive_voltage(feeder, bad_voltage):
+    """No I^2R in a feeder carrying no current."""
+    assert needs(lambda: feeder.loss_w(1000.0, bad_voltage,
+                                    CABLE_TEMP_REFERENCE_K)) == 0.0
+
+
+def test_the_three_methods_agree_about_a_dead_bus(feeder):
+    """One guard, one place. Three methods, one answer.
+
+    The fix is for voltage_drop_v and loss_w to obtain their current from
+    current_a rather than recomputing P/V, so the guard lives in exactly one
+    place — the same reasoning that put the temperature conversion inside
+    resistance_ohm and left the callers to just call it.
+    """
+    for volts in (0.0, -120.0):
+        assert feeder.current_a(1000.0, volts) == 0.0
+        assert feeder.voltage_drop_v(1000.0, volts, CABLE_TEMP_REFERENCE_K) == 0.0
+        assert feeder.loss_w(1000.0, volts, CABLE_TEMP_REFERENCE_K) == 0.0
