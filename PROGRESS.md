@@ -52,10 +52,21 @@ Authors are Troy Celdran with JARVIS (Claude Opus 5) as co-author.
 ## Next cycle — week of 2026-09-08
 Two upgrades, taken together because the second is more useful once the first
 exists. Both are in the README roadmap.
-- [ ] **Electrical topology** — bus voltage, per-feeder currents, converter
-      ratings distinct from device efficiencies, a protection scheme. This is
-      what turns a power balance into something buildable, and what would make
-      an SLD a real statement about voltage levels rather than an illustration.
+- [ ] **Electrical topology** — split into four work orders, spec in
+      `topology.py`'s module docstring, constants in `config.py`.
+      - [ ] **T01** `topology.py` — Feeder/DCBus: R(T), current, voltage drop,
+            I^2R, conductor mass, sizing from a loss budget. (USER)
+      - [ ] **T02** `power_bus.py` — wire feeders into the tick; the
+            conservation identity gains loss terms. (Claude)
+      - [ ] **T03** converters — converter efficiency as distinct from device
+            efficiency.
+      - [ ] **T04** protection — fault current, ratings, zonal coordination,
+            DC arc interruption.
+      Architecture settled from NASA sources: a 120 VDC user bus (ISPSIS,
+      100 m limit) carrying every asset EXCEPT the reactor, which must sit
+      >= 1 km away for NUCLEAR reasons and therefore needs a boost/transmit/
+      buck chain. The ceiling on transmission voltage is space-qualified
+      SEMICONDUCTORS (160 V devices, 1.5 kV rad-hard cap), not insulation.
 - [ ] **Client-side model** — port the simulation core to JavaScript so it runs
       in a browser instead of replaying an exported history. Most of the work
       is already done: the controller is plain arithmetic with no numpy because

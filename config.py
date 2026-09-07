@@ -153,3 +153,72 @@ class LoadPriority(IntEnum):
     HIGH = 1       # habitat thermal control minimum
     MEDIUM = 2     # communications array
     LOW = 3        # science payloads, drills, rovers
+
+
+# --- Electrical topology -----------------------------------------------------
+# Added 2026-09-07 for the topology work (T01-T04). Everything above this line
+# is a POWER BALANCE: watts in, watts out, no voltage anywhere. These constants
+# are what turn it into something buildable.
+
+# NASA's International Space Power System Interoperability Standard (ISPSIS)
+# fixes the user bus at 120 VDC with 28 VDC for small loads. NASA's MIPS
+# project states the constraint without hedging: "Power exchange must occur at
+# 120 VDC (requirement) and a distance less than 100 m (limitation of 120 VDC)."
+# That 100 m is not a style preference — it is the distance at which 120 V
+# stops being able to move useful power without absurd conductor mass.
+USER_BUS_VOLTAGE_V: float = 120.0
+AUX_BUS_VOLTAGE_V: float = 28.0
+USER_BUS_MAX_SPAN_M: float = 100.0
+
+# The reactor is the ONE asset that cannot sit on the user bus, and the reason
+# is nuclear, not electrical: NASA FSP requires >= 1 km separation from other
+# elements. At 3 km the reactor is over the 2.4 km lunar horizon from the crew.
+# PV needs no such separation, which is why only the reactor gets a
+# transmission link — "photovoltaic panels do not need extensive separation
+# from the habitat, DC can be used for local power transfer."
+FSP_SEPARATION_M: float = 1000.0
+
+# The ceiling on transmission voltage is SEMICONDUCTORS, not insulation.
+# Fully space-qualified silicon devices are limited to 160 V, so a 1 kV bus
+# needs six stacked 175 V bridges; radiation-hardening constraints cap
+# practical DC transmission around 1.5 kV. GaN at 650 V is coming but single
+# event effects are expected to limit its operating voltage.
+QUALIFIED_SWITCH_VOLTAGE_V: float = 160.0
+MAX_RAD_HARD_DC_V: float = 1500.0
+
+# Aluminium, not copper. Al has 63 % of copper's conductivity at 30 % of its
+# density, so about 2.1x the conductance per kilogram. On the Moon mass is the
+# only currency that matters, and NASA's transmission study assumes aluminium
+# conductor throughout.
+CONDUCTOR_RESISTIVITY_OHM_M: float = 2.65e-8    # aluminium at 20 C
+CONDUCTOR_DENSITY_KG_PER_M3: float = 2700.0
+# Published values for aluminium scatter over 0.0039-0.0043 /K depending on
+# alloy and reference temperature. The spread matters here: see the note on
+# cable temperature in topology.py.
+CONDUCTOR_TEMP_COEFF_PER_K: float = 0.0040
+
+# A cable lying on the regolith has no convection and no atmosphere. NASA
+# quotes surface cable temperatures reaching 400 K in sunlight; the lunar
+# night bottoms out near 100 K. Both are far outside the range where a linear
+# temperature coefficient is honest — see the declared simplification.
+CABLE_TEMP_DAY_K: float = 400.0
+CABLE_TEMP_NIGHT_K: float = 100.0
+CABLE_TEMP_REFERENCE_K: float = 293.15
+
+# NASA's transmission study constrains cable loss to 5 % at 3 km for a 40 kW
+# system. Voltage drop is held to the same figure here: below ~5 % the loads
+# and converters stop caring, above it they start misbehaving.
+MAX_FEEDER_LOSS_FRACTION: float = 0.05
+MAX_FEEDER_VOLTAGE_DROP_FRACTION: float = 0.05
+
+# A minimum gauge is a HANDLING limit, not an electrical one: thinner wire
+# survives neither deployment nor thermal cycling. NASA's study holds
+# conductors larger than 16 AWG (1.31 mm^2).
+MIN_CONDUCTOR_AREA_M2: float = 1.31e-6
+
+# Converter efficiency is NOT the same thing as device efficiency. The battery
+# already has a round-trip number for its electrochemistry; this is the power
+# electronics between it and the bus, and it applies to every asset including
+# the ones that currently have no losses at all. NASA's UMIC rack targets
+# > 95 % at 10 kW.
+CONVERTER_EFFICIENCY: float = 0.95

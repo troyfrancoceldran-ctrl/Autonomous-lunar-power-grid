@@ -30,8 +30,8 @@ import pytest
 import visualization
 from visualization import LIGHT, DARK, THEMES, use_theme
 from tests.palette_check import (check_theme, ciede2000, contrast_ratio,
-                                 separation, simulate,
-                                 CONTRAST_FLOOR, DELTA_FLOOR, VISIONS)
+                                separation, simulate,
+                                CONTRAST_FLOOR, DELTA_FLOOR, VISIONS)
 
 
 # --- the measurement itself --------------------------------------------------
