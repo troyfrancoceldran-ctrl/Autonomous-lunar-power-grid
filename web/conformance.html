@@ -1,0 +1,76 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Conformance — Autonomous Lunar Micro-grid</title>
+<style>
+  :root { color-scheme: light dark;
+          --ink:#0b0b0b; --soft:#52514e; --faint:#c9c8c2; --bg:#fcfcfb;
+          --ok:#12633f; --bad:#b13328; --accent:#1963a4; }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink:#f2f3f5; --soft:#9aa2ad; --faint:#333944; --bg:#14161a;
+            --ok:#3ec69d; --bad:#e22e31; --accent:#5aa9e6; }
+  }
+  body { margin:0; padding:2.5rem 1.5rem; background:var(--bg); color:var(--ink);
+        font:14px/1.55 ui-sans-serif,system-ui,-apple-system,sans-serif; }
+  main { max-width:60rem; margin:0 auto; }
+  h1 { font-size:1.5rem; margin:0 0 .3rem; }
+  p.lede { color:var(--soft); margin:0 0 1.6rem; max-width:44rem; }
+  table { border-collapse:collapse; width:100%; margin:1rem 0; }
+  th,td { text-align:right; padding:.45rem .7rem; border-bottom:1px solid var(--faint); }
+  th:first-child,td:first-child { text-align:left; }
+  th { color:var(--soft); font-weight:600; font-size:.82rem;
+      text-transform:uppercase; letter-spacing:.04em; }
+  td.num { font-variant-numeric:tabular-nums; }
+  .pass { color:var(--ok); font-weight:600; }
+  .fail { color:var(--bad); font-weight:600; }
+  #verdict { margin-top:1.4rem; padding:.9rem 1.1rem; border-radius:6px;
+            border:1px solid var(--faint); }
+  pre { overflow-x:auto; color:var(--bad); font-size:.82rem; }
+  code { color:var(--accent); }
+</style>
+<main>
+  <h1>Conformance</h1>
+  <p class="lede">
+    The browser model against the Python model, tick for tick. Three scenarios,
+    1440 ticks each, 46 fields per tick — 198,720 comparisons. A port is not
+    trusted because it reads correctly; it is trusted because it reproduces a
+    known-good run.
+  </p>
+  <div id="out">Running…</div>
+</main>
+<script type="module">
+  import { checkAll } from "./src/conformance.js";
+
+  const names = ["bare", "topology", "full"];
+  const goldens = await Promise.all(
+    names.map((n) => fetch(`./golden/${n}.json`).then((r) => r.json())));
+
+  const results = checkAll(goldens);
+  const passed = results.every((r) => r.passed);
+
+  const rows = results.map((r) => `
+    <tr>
+      <td><code>${r.scenario}</code></td>
+      <td class="num">${r.ticks}</td>
+      <td class="num">${r.fields}</td>
+      <td class="num">${r.checks.toLocaleString()}</td>
+      <td class="num">${r.worst.relative ? r.worst.relative.toExponential(2) : "0"}</td>
+      <td class="${r.passed ? "pass" : "fail"}">${r.passed ? "PASS" : "FAIL"}</td>
+    </tr>`).join("");
+
+  const failures = results.flatMap((r) =>
+    [...r.failures.map((f) => `${r.scenario} tick ${f.tick} ${f.field}: got ${f.got}, want ${f.want}`),
+    ...r.summaryFailures.map((f) => `${r.scenario} SUMMARY ${f.field}: got ${f.got}, want ${f.want}`)]);
+
+  document.getElementById("out").innerHTML = `
+    <table>
+      <thead><tr><th>scenario</th><th>ticks</th><th>fields</th>
+                <th>checks</th><th>worst rel</th><th>result</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${failures.length ? `<pre>${failures.join("\n")}</pre>` : ""}
+    <div id="verdict" class="${passed ? "pass" : "fail"}">
+      ${passed
+        ? "CONFORMANCE PASS — the browser reproduces the Python model."
+        : "CONFORMANCE FAIL — see the divergences above."}
+    </div>`;
+</script>

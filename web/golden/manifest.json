@@ -1,0 +1,32 @@
+{
+  "bare": {
+    "options": {
+      "outage": null,
+      "topology": false,
+      "converters": false
+    },
+    "ticks": 1440,
+    "fields": 46,
+    "bytes": 370736
+  },
+  "topology": {
+    "options": {
+      "outage": null,
+      "topology": true,
+      "converters": false
+    },
+    "ticks": 1440,
+    "fields": 46,
+    "bytes": 486334
+  },
+  "full": {
+    "options": {
+      "outage": 500.0,
+      "topology": true,
+      "converters": true
+    },
+    "ticks": 1440,
+    "fields": 46,
+    "bytes": 510153
+  }
+}

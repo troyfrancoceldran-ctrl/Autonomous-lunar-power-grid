@@ -154,29 +154,29 @@ WHAT IT MEASURED
 Run over the assembled outpost, two results fall out that were not put in.
 
 1. EVERY FEEDER'S FAULT IS 88x ITS RATING. Exactly, all eight of them, from
-   the 10 A reactor link to the 417 A battery. That is algebra, not
-   coincidence: both figures derive from the same conductor, so
+the 10 A reactor link to the 417 A battery. That is algebra, not
+coincidence: both figures derive from the same conductor, so
 
-       I_f     V A / (rho_night L_c)        1     rho_ref
-       ---  =  ---------------------  =  ( --- )( ------- )  =  20 x 4.398
-       I_r     A f V / (rho_ref L_c)         f    rho_night
+    I_f     V A / (rho_night L_c)        1     rho_ref
+    ---  =  ---------------------  =  ( --- )( ------- )  =  20 x 4.398
+    I_r     A f V / (rho_ref L_c)         f    rho_night
 
-   and V, A and L all cancel. The fault-to-rating ratio is a property of the
-   SIZING RULE and the temperature swing, not of any particular feeder — any
-   outpost sized to a 5 % loss budget gets 88x whatever its geometry.
+and V, A and L all cancel. The fault-to-rating ratio is a property of the
+SIZING RULE and the temperature swing, not of any particular feeder — any
+outpost sized to a 5 % loss budget gets 88x whatever its geometry.
 
 2. ONLY 2 OF 8 FEEDERS CAN BE COORDINATED. Against a 1000 A bus device, six
-   fail selectivity at their own fault current. The reason is the margin
-   itself: PROTECTION_COORDINATION_MARGIN_S is 100 us against a 50 us floor,
-   so any fault that clears the upstream device in under 150 us leaves no
-   room for a margin at all. Only the comms array (1.8 kA) and the reactor
-   link (0.9 kA) draw little enough current to be slow enough.
+fail selectivity at their own fault current. The reason is the margin
+itself: PROTECTION_COORDINATION_MARGIN_S is 100 us against a 50 us floor,
+so any fault that clears the upstream device in under 150 us leaves no
+room for a margin at all. Only the comms array (1.8 kA) and the reactor
+link (0.9 kA) draw little enough current to be slow enough.
 
-   This is the sting from THE MATHEMATICS, section 4, confirmed against real
-   numbers. It is a limitation of the DESIGN — identical I^2t ratings and a
-   margin twice the floor — and not of the implementation. Staggering the
-   I^2t ratings is the fix, and it is deliberately not applied here, because
-   the model is more useful stating the problem than quietly dodging it.
+This is the sting from THE MATHEMATICS, section 4, confirmed against real
+numbers. It is a limitation of the DESIGN — identical I^2t ratings and a
+margin twice the floor — and not of the implementation. Staggering the
+I^2t ratings is the fix, and it is deliberately not applied here, because
+the model is more useful stating the problem than quietly dodging it.
 
 --------------------------------------------------------------------------------
 WHAT THIS DELIBERATELY DOES NOT MODEL

@@ -391,6 +391,68 @@ before this is silently revised.
 
 ---
 
+## The model also runs in a browser
+
+`web/` is a JavaScript port of the simulation core, so a page can change
+something and watch the outpost respond rather than replaying an exported file.
+It exists because an operable single-line diagram needs the model client-side.
+
+It was cheap because the core is **906 lines** and imports nothing outside the
+Python standard library — a consequence of writing the controller as plain
+arithmetic in Step 7 so it could one day run on a microcontroller.
+
+The port is not trusted because it reads correctly. It is trusted because it
+reproduces the Python model tick for tick:
+
+```
+  scenario     ticks  fields     checks   worst rel   result
+  bare         1440      46      66240    4.63e-10   PASS
+  topology     1440      46      66240    4.93e-10   PASS
+  full         1440      46      66240    4.91e-10   PASS
+```
+
+**198,720 comparisons.** And that 5e-10 is the golden file's 10-digit storage
+format, not the model: re-exported at full precision the `bare` scenario is
+**bit-identical**, and the other two agree to 1.85e-16 — under one ULP of a
+double. See `web/README.md` for why that residue exists and why it stays.
+
+```bash
+.venv/bin/python web/tools/run_conformance.py
+```
+
+---
+
+## The model also runs in a browser
+
+`web/` is a JavaScript port of the simulation core, so a page can change
+something and watch the outpost respond rather than replaying an exported file.
+It exists because an operable single-line diagram needs the model client-side.
+
+It was cheap because the core is **906 lines** and imports nothing outside the
+Python standard library — a consequence of writing the controller as plain
+arithmetic in Step 7 so it could one day run on a microcontroller.
+
+The port is not trusted because it reads correctly. It is trusted because it
+reproduces the Python model tick for tick:
+
+```
+  scenario     ticks  fields     checks   worst rel   result
+  bare         1440      46      66240    4.63e-10   PASS
+  topology     1440      46      66240    4.93e-10   PASS
+  full         1440      46      66240    4.91e-10   PASS
+```
+
+**198,720 comparisons.** And that 5e-10 is the golden file's 10-digit storage
+format, not the model: re-exported at full precision the `bare` scenario is
+**bit-identical**, and the other two agree to 1.85e-16 — under one ULP of a
+double. See `web/README.md` for why that residue exists and why it stays.
+
+```bash
+.venv/bin/python web/tools/run_conformance.py
+```
+
+---
+
 ## Testing
 
 300 tests in about two and a half seconds. They are organised by
@@ -483,6 +545,8 @@ protection.py             SSPC trip curves, fault current, coordination
 main.py                   entry point and the outpost parts list
 tests/                    300 tests + INVARIANTS.md + mutation_check.py
                           + palette_check.py (figure legibility, measured)
+web/                      the model in a browser + conformance check
+web/                      the model in a browser + conformance check
 docs/                     compliance inspection, figures,
                           protection_formulas.pdf (T04 mathematics)
 data/                     run outputs (gitignored)
