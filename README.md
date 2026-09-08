@@ -470,6 +470,12 @@ core.
 open web/sld.html
 ```
 
+The page also renders the four figures live and animates them against the
+clock — a time cursor tracks the diagram, and every chart redraws when the
+scenario changes. Unlike the committed PNGs, which show one fixed run, these
+follow whatever outpost you have configured. It carries its own write-up too,
+so the page stands alone without this README.
+
 ---
 
 ## Testing
