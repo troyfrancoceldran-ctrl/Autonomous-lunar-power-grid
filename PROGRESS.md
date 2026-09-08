@@ -109,11 +109,20 @@ exists. Both are in the README roadmap.
       >= 1 km away for NUCLEAR reasons and therefore needs a boost/transmit/
       buck chain. The ceiling on transmission voltage is space-qualified
       SEMICONDUCTORS (160 V devices, 1.5 kV rad-hard cap), not insulation.
-- [ ] **Client-side model** — port the simulation core to JavaScript so it runs
-      in a browser instead of replaying an exported history. Most of the work
-      is already done: the controller is plain arithmetic with no numpy because
-      it was written to port to a microcontroller, and that same discipline
-      makes it port to JS.
+- [x] **Client-side model** — DONE 2026-09-08 (Claude). `web/` is the JS port:
+      906 lines of core, every import stdlib. Held to the Python model by a
+      conformance check — 3 scenarios x 1440 ticks x 46 fields = 198,720
+      comparisons, all PASS. At full precision the `bare` scenario is
+      bit-identical and the other two agree to 1.85e-16, under one ULP; the
+      residue is math.pow vs `i * i`, and `i * i` is the more accurate, so it
+      stays. `config.js` is GENERATED from `config.py` so constants cannot
+      drift. No Node needed: macOS JavaScriptCore via `osascript` runs the
+      headless check.
+- [x] **Operable single-line diagram** — DONE 2026-09-08 (Claude).
+      `web/sld.html`, generated from `buildTopology()` rather than hand-drawn,
+      with the verified model injected by `build_sld.py`. Scrub the clock,
+      trigger the outage, toggle conductors/converters, resize the PV array —
+      it re-runs and redraws. Self-contained; opens from disk.
 Further out, and dependent on both: an operable SLD, then a hardware render.
 The successor is expected to be a NEW repo with its own name.
 

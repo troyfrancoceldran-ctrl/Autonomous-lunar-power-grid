@@ -1,0 +1,1705 @@
+<title>Lunar Outpost One-Line</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  /* ---- tokens: complete light palette on bare :root ---------------------- */
+  :root {
+    --bg:        #eef1f4;
+    --panel:     #fafbfc;
+    --panel-2:   #f2f5f7;
+    --ink:       #12161c;
+    --soft:      #58626f;
+    --faint:     #c3ccd6;
+    --hair:      #dde3ea;
+
+    /* The repo's own measured palette. Chosen by CIEDE2000 separation under
+       protanopia/deuteranopia/tritanopia plus WCAG 1.4.11 contrast, so the
+       console and the figures in docs/ are one system. */
+    --blue:   #1963a4;
+    --orange: #d67510;
+    --green:  #2ba07e;
+    --red:    #b13328;
+
+    --grid:      #d7dee6;
+    --bus:       #12161c;
+    --shadow:    0 1px 2px rgba(18,22,28,.06), 0 8px 24px rgba(18,22,28,.05);
+    --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  :root:not([data-theme="light"]) { }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:      #0e1218;
+      --panel:   #161b23;
+      --panel-2: #1b212a;
+      --ink:     #e7edf4;
+      --soft:    #94a1b2;
+      --faint:   #333d4a;
+      --hair:    #232b35;
+      --blue:    #207db6;
+      --orange:  #fea12d;
+      --green:   #3ec69d;
+      --red:     #e22e31;
+      --grid:    #232b35;
+      --bus:     #cbd6e2;
+      --shadow:  0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:      #0e1218;  --panel: #161b23; --panel-2: #1b212a;
+    --ink:     #e7edf4;  --soft:  #94a1b2; --faint:   #333d4a; --hair: #232b35;
+    --blue:    #207db6;  --orange:#fea12d; --green:   #3ec69d; --red:  #e22e31;
+    --grid:    #232b35;  --bus:   #cbd6e2;
+    --shadow:  0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--font-sans); font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 20px 56px; }
+
+  /* ---- masthead ---------------------------------------------------------- */
+  header { display: flex; flex-wrap: wrap; align-items: flex-end;
+           justify-content: space-between; gap: 16px 24px; margin-bottom: 20px; }
+  h1 { font-size: 25px; font-weight: 700; letter-spacing: -.02em; margin: 0;
+       text-wrap: balance; }
+  .sub { color: var(--soft); margin: 5px 0 0; max-width: 56ch; }
+  .clock { font-family: var(--font-mono); text-align: right; }
+  .clock .t { font-size: 27px; font-weight: 500; letter-spacing: -.02em;
+              font-variant-numeric: tabular-nums; display: block; }
+  .phase { font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+           color: var(--soft); }
+  .phase .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+                background: var(--orange); margin-right: 6px; vertical-align: 1px; }
+  .phase.night .dot { background: var(--blue); }
+
+  /* ---- the two signals --------------------------------------------------- */
+  .signals { display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+             margin-bottom: 16px; }
+  .sig { background: var(--panel); border: 1px solid var(--hair); border-radius: 8px;
+         padding: 13px 15px 15px; }
+  .sig h2 { font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+            color: var(--soft); margin: 0 0 3px; font-weight: 600; }
+  .sig .val { font-family: var(--font-mono); font-size: 22px; font-weight: 500;
+              font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .sig .note { font-size: 12px; color: var(--soft); margin-top: 2px; min-height: 18px; }
+  .track { position: relative; height: 8px; background: var(--panel-2);
+           border: 1px solid var(--hair); border-radius: 99px; margin-top: 9px;
+           overflow: hidden; }
+  .fill { position: absolute; inset: 0 auto 0 0; background: var(--blue);
+          border-radius: 99px; transition: width .12s linear, background .12s linear; }
+  .band { position: absolute; top: 0; bottom: 0; background: var(--faint); opacity: .55; }
+  .zero { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--soft); }
+
+  /* ---- diagram ----------------------------------------------------------- */
+  figure { margin: 0 0 16px; background: var(--panel); border: 1px solid var(--hair);
+           border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
+  .figscroll { overflow-x: auto; }
+  svg.sld { display: block; width: 100%; min-width: 860px; height: auto; }
+  figcaption { padding: 11px 16px 13px; border-top: 1px solid var(--hair);
+               color: var(--soft); font-size: 12.5px; background: var(--panel-2); }
+
+  .lbl   { font-family: var(--font-sans); font-size: 12px; font-weight: 600; fill: var(--ink); }
+  .val   { font-family: var(--font-mono); font-size: 11.5px; fill: var(--soft);
+           font-variant-numeric: tabular-nums; }
+  .eyebrow { font-family: var(--font-sans); font-size: 9.5px; font-weight: 600;
+             letter-spacing: .14em; fill: var(--soft); }
+  .annot { font-family: var(--font-mono); font-size: 10.5px; fill: var(--soft);
+           font-variant-numeric: tabular-nums; }
+  .busline { stroke: var(--bus); stroke-width: 7; stroke-linecap: round; }
+  .feeder  { stroke: var(--faint); stroke-width: 2; fill: none; }
+  .feeder.live  { stroke: var(--blue); stroke-width: 2.6; }
+  .feeder.charge{ stroke: var(--green); stroke-width: 2.6; }
+  .feeder.shedout { stroke: var(--faint); stroke-dasharray: 3 4; }
+  .sym  { fill: var(--panel); stroke: var(--soft); stroke-width: 1.6; }
+  .sym.on { stroke: var(--blue); }
+  .sym.off { stroke: var(--faint); }
+  .glyph { stroke: var(--soft); stroke-width: 1.6; fill: none; }
+  .glyph.on { stroke: var(--blue); }
+  .glyph.off { stroke: var(--faint); }
+  .dim { opacity: .42; }
+  .chip { font-family: var(--font-mono); font-size: 9px; font-weight: 600;
+          letter-spacing: .08em; fill: var(--red); }
+  .fault { stroke: var(--red); }
+
+  /* ---- controls ---------------------------------------------------------- */
+  .panelrow { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--hair); border-radius: 8px;
+          padding: 15px 16px 17px; }
+  .card h2 { font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--soft); margin: 0 0 12px; font-weight: 600; }
+  .transport { display: flex; align-items: center; gap: 12px; }
+  button { font: inherit; font-weight: 600; color: var(--ink); background: var(--panel-2);
+           border: 1px solid var(--hair); border-radius: 6px; padding: 7px 14px;
+           cursor: pointer; }
+  button:hover { border-color: var(--soft); }
+  button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  input[type=range] { flex: 1; accent-color: var(--blue); min-width: 120px; }
+  input[type=range]:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+  .switches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .sw { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px;
+        border: 1px solid var(--hair); border-radius: 99px; background: var(--panel-2);
+        cursor: pointer; font-size: 12.5px; user-select: none; }
+  .sw input { accent-color: var(--blue); margin: 0; }
+  .sw:has(input:checked) { border-color: var(--blue); color: var(--blue); }
+  .slider-row { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+  .slider-row label { font-size: 12.5px; color: var(--soft); white-space: nowrap; }
+  .slider-row output { font-family: var(--font-mono); font-size: 12.5px;
+                       font-variant-numeric: tabular-nums; min-width: 68px; text-align: right; }
+
+  /* ---- run tally --------------------------------------------------------- */
+  dl.tally { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; margin: 0; }
+  dl.tally dt { color: var(--soft); font-size: 12.5px; }
+  dl.tally dd { margin: 0; font-family: var(--font-mono); font-size: 12.5px;
+                font-variant-numeric: tabular-nums; text-align: right; }
+  dd.bad { color: var(--red); font-weight: 600; }
+  dd.good { color: var(--green); }
+  .foot { margin-top: 22px; color: var(--soft); font-size: 12.5px; max-width: 76ch; }
+  .foot code { font-family: var(--font-mono); font-size: 12px; color: var(--ink); }
+
+  @media (max-width: 780px) {
+    .signals, .panelrow { grid-template-columns: 1fr; }
+    .clock { text-align: left; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fill { transition: none; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Lunar Outpost One-Line</h1>
+      <p class="sub">
+        A 120&nbsp;VDC microgrid with the reactor a kilometre out. The
+        simulation runs in this page — scrub the clock or change the outpost
+        and the diagram answers.
+      </p>
+    </div>
+    <div class="clock">
+      <span class="t" id="clock">0000 h</span>
+      <span class="phase" id="phase"><span class="dot"></span>lunar day</span>
+    </div>
+  </header>
+
+  <section class="signals">
+    <div class="sig">
+      <h2>Energy signal — fleet reserve</h2>
+      <div class="val" id="socVal">1.0000</div>
+      <div class="note" id="socNote">what a conventional controller watches</div>
+      <div class="track">
+        <div class="band" id="deadband"></div>
+        <div class="fill" id="socFill" style="width:100%"></div>
+      </div>
+    </div>
+    <div class="sig">
+      <h2>Power signal — headroom</h2>
+      <div class="val" id="hrVal">+0.00 kW</div>
+      <div class="note" id="hrNote">what this project added</div>
+      <div class="track">
+        <div class="zero" id="hrZero" style="left:50%"></div>
+        <div class="fill" id="hrFill" style="width:50%"></div>
+      </div>
+    </div>
+  </section>
+
+  <figure>
+    <div class="figscroll">
+      <svg class="sld" id="sld" viewBox="0 0 1000 520" role="img"
+           aria-label="Single line diagram of the lunar outpost: a 120 volt DC user bus fed by a photovoltaic array and, over a one kilometre 1000 volt link, a fission reactor; with a battery and regenerative fuel cell on one side and four loads on the other."></svg>
+    </div>
+    <figcaption id="cap">
+      Drawn from <code>buildTopology()</code>, not by hand — the feeder lengths,
+      voltages and conductor areas shown are the ones the model used.
+    </figcaption>
+  </figure>
+
+  <div class="panelrow">
+    <div class="card">
+      <h2>Clock</h2>
+      <div class="transport">
+        <button id="play" class="primary" type="button">Play</button>
+        <input type="range" id="scrub" min="0" max="1439" value="0" step="1"
+               aria-label="hour of the run">
+        <span class="val" id="scrubVal" style="font-family:var(--font-mono);
+              font-size:13px; min-width:72px; text-align:right;">0 / 1439</span>
+      </div>
+      <div class="switches">
+        <label class="sw"><input type="checkbox" id="outage"> Reactor outage at t=500</label>
+        <label class="sw"><input type="checkbox" id="topology" checked> Conductors</label>
+        <label class="sw"><input type="checkbox" id="converters" checked> Converters</label>
+      </div>
+      <div class="slider-row">
+        <label for="pv">PV array</label>
+        <input type="range" id="pv" min="40" max="220" value="100" step="5">
+        <output id="pvVal">100 m²</output>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>This 60-day run</h2>
+      <dl class="tally">
+        <dt>Generated</dt><dd id="tGen">—</dd>
+        <dt>Served</dt><dd id="tServed">—</dd>
+        <dt>Unserved</dt><dd id="tUnserved">—</dd>
+        <dt>Curtailed</dt><dd id="tCurt">—</dd>
+        <dt>Conductor loss</dt><dd id="tFeed">—</dd>
+        <dt>Converter loss</dt><dd id="tConv">—</dd>
+        <dt>Controller actions</dt><dd id="tActions">—</dd>
+      </dl>
+    </div>
+  </div>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<script>
+'use strict';
+
+// ===== config.js ===================================================
+// GENERATED FILE — do not edit.
+//
+// Produced by web/tools/export_config.py from config.py, so the browser model
+// and the Python model cannot disagree about a constant. Change config.py and
+// re-run the generator.
+//
+// Every comment below is carried across from the Python source, because a
+// number without its justification is how a model quietly drifts away from the
+// literature it claims to follow.
+
+
+// --- Time base -------------------------------------------------------------
+const TIME_STEP_HOURS = 1.0;
+
+// The Moon is tidally locked, so its ROTATION period is 27.3 d — but a point on
+// the surface returns to the same position relative to the SUN only after the
+// synodic period of 29.53 d = 708.7 h. That is the figure a power system must
+// survive, and it is what NASA's Fission Surface Power requirement refers to
+// when it calls for "at least 354 hr of nighttime energy storage".
+// The common "14 Earth days = 336 h" shorthand understates the night by 5.1%.
+const LUNAR_SYNODIC_PERIOD_HOURS = 708.7;
+
+const LUNAR_DAY_HOURS = 354.35;
+
+const LUNAR_NIGHT_HOURS = 354.35;
+
+const LUNAR_CYCLE_HOURS = 708.7;
+
+// >= 2 full synodic cycles (1417.4 h) so the run captures a complete
+// charge/discharge round trip twice over, not 1.9 of one.
+const SIM_DURATION_DAYS = 60;
+
+const SIM_DURATION_HOURS = 1440;
+
+const N_STEPS = 1440;
+
+const RANDOM_SEED = 42;
+
+// --- Generation -------------------------------------------------------------
+// Solar constant at 1 AU. The Moon has no atmosphere, so unlike Earth's surface
+// (~1000 W/m^2 at best) the full extraterrestrial value reaches the panels.
+const SOLAR_CONSTANT_W_PER_M2 = 1361.0;
+
+const PV_AREA_M2 = 100.0;
+
+const PV_EFFICIENCY = 0.3;
+
+const PV_PACKING_FACTOR = 0.9;
+
+// Lunar regolith dust is electrostatically charged, clingy and abrasive; NASA
+// measurements show short-circuit current falling exponentially with deposited
+// dust mass, and every landing nearby adds more. A fixed derate is a crude
+// stand-in for a mechanism that really worsens over mission life.
+const PV_DUST_DERATE = 0.95;
+
+// Sun-elevation profile. A fixed horizontal array at an equatorial site sees
+// irradiance vary as sin(pi * phase / day), averaging 2/pi = 0.637 of peak; a
+// two-axis tracker or a NASA-style Vertical Solar Array holds close to peak all
+// day. Assuming the wrong one overstates daily energy by 36%.
+const PV_SUN_TRACKING = false;
+
+// Fission Surface Power — NASA Kilopower/FSP class, runs through the night.
+// NASA's FSP requirement set: 40 kWe class (10 kWe demonstrator), >= 10 year
+// design life, autonomous start/stop without human assistance.
+const FSP_RATED_POWER_W = 10000.0;
+
+const FSP_AVAILABILITY = 1.0;
+
+// A scripted outage, so contingency behaviour is reproducible rather than
+// stochastic. Set FSP_OUTAGE_START_HOURS to None to disable.
+const FSP_OUTAGE_START_HOURS = null;
+
+const FSP_OUTAGE_DURATION_HOURS = 24.0;
+
+// --- Battery ----------------------------------------------------------------
+const BATTERY_CAPACITY_WH = 200000.0;
+
+const BATTERY_INITIAL_SOC = 1.0;
+
+const BATTERY_MAX_CHARGE_POWER_W = 50000.0;
+
+const BATTERY_MAX_DISCHARGE_POWER_W = 50000.0;
+
+// 95% depth of discharge would be reckless in LEO, where practice keeps DoD
+// below 30% because the spacecraft sees ~5000 cycles a year. A lunar surface
+// system sees ONE cycle per synodic period — about 124 in a 10-year life — so
+// deep discharge is affordable here. The justification is cycle count, not
+// optimism: change the mission profile and this number must change with it.
+const BATTERY_SOC_MIN = 0.05;
+
+const BATTERY_SOC_MAX = 1.0;
+
+const BATTERY_CHARGE_EFFICIENCY = 0.95;
+
+const BATTERY_DISCHARGE_EFFICIENCY = 0.95;
+
+// Controller thresholds, as fractions of the CAPACITY-WEIGHTED FLEET reserve
+// (see power_bus.aggregate_soc), not of any one device.
+const SOC_SHED_THRESHOLD = 0.3;
+
+const SOC_RESTORE_THRESHOLD = 0.45;
+
+// Minimum interval between two actions on the SAME load. This must be strictly
+// GREATER than TIME_STEP_HOURS or the guard is vacuous: it tests
+// `t - last >= min_dwell`, so at 1.0 h with a 1.0 h tick a load acted on at t
+// is free again at t+1. It sat at 1.0 from Step 7 and went unnoticed until
+// W04 added a branch that bypasses hysteresis and left dwell as the only brake.
+const MIN_ACTION_DWELL_HOURS = 3.0;
+
+// --- Regenerative Fuel Cell (RFC) -------------------------------------------
+const H2_SPECIFIC_ENERGY_MJ_PER_KG = 120.0;
+
+const ELECTROLYZER_EFFICIENCY = 0.7;
+
+const FUEL_CELL_EFFICIENCY = 0.55;
+
+// Pre-converted so no module has to do MJ -> Wh arithmetic inline.
+const H2_SPECIFIC_ENERGY_WH_PER_KG = 33333.333333333336;
+
+// Stoichiometry of 2 H2 + O2 -> 2 H2O: 4 g of H2 pairs with 32 g of O2.
+const O2_TO_H2_MASS_RATIO = 8.0;
+
+const RFC_H2_CAPACITY_KG = 120.0;
+
+const RFC_INITIAL_SOC = 1.0;
+
+const RFC_MAX_CHARGE_POWER_W = 25000.0;
+
+const RFC_MAX_DISCHARGE_POWER_W = 12000.0;
+
+const RFC_SOC_MIN = 0.05;
+
+const RFC_SOC_MAX = 1.0;
+
+// --- Load profiles -----------------------------------------------------------
+// Life support: atmosphere circulation, CO2 scrubbing, water recovery.
+// Runs flat, around the clock, and is never shed.
+const ECLSS_POWER_W = 6500.0;
+
+// Habitat thermal control. The lunar surface swings from about +120 C in
+// daylight to -170 C at night, so the load never goes away — it only changes
+// job, from rejecting heat to adding it.
+const THERMAL_DAY_POWER_W = 5500.0;
+
+const THERMAL_NIGHT_POWER_W = 4500.0;
+
+// High-gain Earth link: one transmit window per Earth day, standby between.
+const COMMS_ACTIVE_POWER_W = 2500.0;
+
+const COMMS_STANDBY_POWER_W = 500.0;
+
+const COMMS_WINDOW_HOURS = 8.0;
+
+const COMMS_PERIOD_HOURS = 24.0;
+
+// Science campaigns: drills, rovers, instruments. Fully interruptible.
+const SCIENCE_ACTIVE_POWER_W = 6000.0;
+
+const SCIENCE_IDLE_POWER_W = 0.0;
+
+const SCIENCE_WINDOW_HOURS = 12.0;
+
+const SCIENCE_PERIOD_HOURS = 24.0;
+
+// --- Electrical topology -----------------------------------------------------
+// Added 2026-09-07 for the topology work (T01-T04). Everything above this line
+// is a POWER BALANCE: watts in, watts out, no voltage anywhere. These constants
+// are what turn it into something buildable.
+// NASA's International Space Power System Interoperability Standard (ISPSIS)
+// fixes the user bus at 120 VDC with 28 VDC for small loads. NASA's MIPS
+// project states the constraint without hedging: "Power exchange must occur at
+// 120 VDC (requirement) and a distance less than 100 m (limitation of 120 VDC)."
+// That 100 m is not a style preference — it is the distance at which 120 V
+// stops being able to move useful power without absurd conductor mass.
+const USER_BUS_VOLTAGE_V = 120.0;
+
+const AUX_BUS_VOLTAGE_V = 28.0;
+
+const USER_BUS_MAX_SPAN_M = 100.0;
+
+// The reactor is the ONE asset that cannot sit on the user bus, and the reason
+// is nuclear, not electrical: NASA FSP requires >= 1 km separation from other
+// elements. At 3 km the reactor is over the 2.4 km lunar horizon from the crew.
+// PV needs no such separation, which is why only the reactor gets a
+// transmission link — "photovoltaic panels do not need extensive separation
+// from the habitat, DC can be used for local power transfer."
+const FSP_SEPARATION_M = 1000.0;
+
+// The ceiling on transmission voltage is SEMICONDUCTORS, not insulation.
+// Fully space-qualified silicon devices are limited to 160 V, so a 1 kV bus
+// needs six stacked 175 V bridges; radiation-hardening constraints cap
+// practical DC transmission around 1.5 kV. GaN at 650 V is coming but single
+// event effects are expected to limit its operating voltage.
+const QUALIFIED_SWITCH_VOLTAGE_V = 160.0;
+
+const MAX_RAD_HARD_DC_V = 1500.0;
+
+// Aluminium, not copper. Al has 63 % of copper's conductivity at 30 % of its
+// density, so about 2.1x the conductance per kilogram. On the Moon mass is the
+// only currency that matters, and NASA's transmission study assumes aluminium
+// conductor throughout.
+const CONDUCTOR_RESISTIVITY_OHM_M = 2.65e-08;
+
+const CONDUCTOR_DENSITY_KG_PER_M3 = 2700.0;
+
+// Published values for aluminium scatter over 0.0039-0.0043 /K depending on
+// alloy and reference temperature. The spread matters here: see the note on
+// cable temperature in topology.py.
+const CONDUCTOR_TEMP_COEFF_PER_K = 0.004;
+
+// A cable lying on the regolith has no convection and no atmosphere. NASA
+// quotes surface cable temperatures reaching 400 K in sunlight; the lunar
+// night bottoms out near 100 K. Both are far outside the range where a linear
+// temperature coefficient is honest — see the declared simplification.
+const CABLE_TEMP_DAY_K = 400.0;
+
+const CABLE_TEMP_NIGHT_K = 100.0;
+
+const CABLE_TEMP_REFERENCE_K = 293.15;
+
+// NASA's transmission study constrains cable loss to 5 % at 3 km for a 40 kW
+// system. Voltage drop is held to the same figure here: below ~5 % the loads
+// and converters stop caring, above it they start misbehaving.
+const MAX_FEEDER_LOSS_FRACTION = 0.05;
+
+const MAX_FEEDER_VOLTAGE_DROP_FRACTION = 0.05;
+
+// A minimum gauge is a HANDLING limit, not an electrical one: thinner wire
+// survives neither deployment nor thermal cycling. NASA's study holds
+// conductors larger than 16 AWG (1.31 mm^2).
+const MIN_CONDUCTOR_AREA_M2 = 1.31e-06;
+
+// Converter efficiency is NOT the same thing as device efficiency. The battery
+// already has a round-trip number for its electrochemistry; this is the power
+// electronics between it and the bus, and it applies to every asset including
+// the ones that currently have no losses at all. NASA's UMIC rack targets
+// > 95 % at 10 kW.
+const CONVERTER_EFFICIENCY = 0.95;
+
+// PROVISIONAL — the reactor link's transmission voltage. This is a T01
+// DECISION, not a given: it should fall out of the mass-versus-voltage trade
+// (conductor mass ~ 1/V^2, insulation mass ~ V) clamped by MAX_RAD_HARD_DC_V
+// and by how many 160 V devices you are willing to stack. 1000 V is a
+// placeholder that keeps the topology constructible until that work is done.
+const TRANSMISSION_VOLTAGE_V = 1000.0;
+
+// --- Protection (T04) --------------------------------------------------------
+// DC has no natural current zero, so a mechanical breaker has nothing to help
+// it extinguish the arc. Spacecraft practice is the Solid State Power
+// Controller (SSPC) — the ISS distributes through RPCMs, and NASA's AMPS
+// switchgear module is the modern equivalent at 0.5 kg against the ISS RPCM's
+// 4.7 kg. An SSPC forces the current to zero by switching, in microseconds.
+// A typical SSPC protection curve has three regions: a no-trip region below
+// the rating, an I^2t region for overload, and an instantaneous region for
+// short circuits. Instantaneous thresholds run up to about 10x rated current.
+const SSPC_INSTANTANEOUS_TRIP_MULTIPLE = 10.0;
+
+// Solid-state switching acts in microseconds, which is what makes it viable
+// where a mechanical contact would weld shut.
+const SSPC_MIN_TRIP_TIME_S = 5e-05;
+
+// Let-through energy the device and its cable can absorb before damage. An
+// SSPC protects on ENERGY, not merely on current — a breaker trips when the
+// current reaches a threshold, an SSPC when enough has passed through.
+const SSPC_I2T_RATING_A2S = 2000.0;
+
+// Selectivity margin: a downstream device must clear this much sooner than the
+// one above it, or a feeder fault takes out the whole bus. NASA calls the goal
+// "zonal protection" — the breaker nearest the fault trips and nothing else.
+const PROTECTION_COORDINATION_MARGIN_S = 0.0001;
+
+// Lower number = higher priority = shed last, restored first.
+const LoadPriority = Object.freeze({
+  CRITICAL: 0,
+  HIGH: 1,
+  MEDIUM: 2,
+  LOW: 3,
+});
+
+// ===== environment.js ==============================================
+// environment.js — the lunar day/night cycle. Port of environment.py.
+
+
+/** Python's % returns a non-negative remainder for a positive divisor; JS's
+ *  keeps the sign of the dividend. t is never negative here, but relying on
+ *  that is exactly the kind of assumption that survives until it doesn't. */
+function mod(a, b) {
+  return ((a % b) + b) % b;
+}
+
+class LunarEnvironment {
+  constructor(startPhaseHours = 0.0) {
+    this.startPhaseHours = startPhaseHours;
+  }
+
+  /** Position within the current synodic cycle, in [0, 708.7). */
+  phaseHours(tHours) {
+    return mod(tHours + this.startPhaseHours, LUNAR_CYCLE_HOURS);
+  }
+
+  /** True while the outpost is in sunlight. Strict < at the terminator. */
+  isDaylight(tHours) {
+    return this.phaseHours(tHours) < LUNAR_DAY_HOURS;
+  }
+
+  /** Peak-flux fraction in [0, 1]; square wave — availability only. */
+  solarIrradianceFraction(tHours) {
+    return this.isDaylight(tHours) ? 1.0 : 0.0;
+  }
+
+  /** Sine of solar elevation in [0, 1]; 0.0 at night. */
+  solarElevationFraction(tHours) {
+    if (!this.isDaylight(tHours)) return 0.0;
+    const phase = this.phaseHours(tHours);
+    return Math.max(0.0, Math.sin((Math.PI * phase) / LUNAR_DAY_HOURS));
+  }
+}
+
+// ===== assets/base.js ==============================================
+// base.js — the concrete parts of base_asset.py.
+//
+// The Python ABCs are gone: JS has no abstract methods and duck typing does
+// the same job. What DOES need porting is the two CONCRETE methods on those
+// base classes, both of which exist because their operands are interface
+// members and a per-device copy would be a chance to get one of them wrong.
+
+class PowerStorage {
+  /** Bus-side power ceiling [W] sustainable for one whole timestep. */
+  availableDischargePowerW(dtHours) {
+    if (dtHours <= 0) return 0.0;
+    return Math.min(this.maxDischargePowerW, this.deliverableEnergyWh / dtHours);
+  }
+}
+
+class Load {
+  constructor() {
+    this.shed = false;
+  }
+
+  /** What the bus actually sees: 0 W while shed. */
+  effectiveDemand(tHours) {
+    return this.shed ? 0.0 : this.demand(tHours);
+  }
+}
+
+// ===== assets/generation.js ========================================
+// generation.js — PVArray and FissionSurfacePower. Port of assets/generation.py.
+
+
+class PVArray {
+  constructor({
+    name = "PV Array", areaM2 = PV_AREA_M2, efficiency = PV_EFFICIENCY,
+    packingFactor = PV_PACKING_FACTOR, dustDerate = PV_DUST_DERATE,
+    sunTracking = PV_SUN_TRACKING,
+  } = {}) {
+    Object.assign(this, { name, areaM2, efficiency, packingFactor, dustDerate, sunTracking });
+  }
+
+  /** P = G_sc * A * eta * f * d * phi(t), in watts. */
+  availablePower(tHours, environment) {
+    // The flag SELECTS the profile; it never scales it. Used as a multiplier
+    // this once made the array produce 0 W at noon.
+    const phi = this.sunTracking
+      ? environment.solarIrradianceFraction(tHours)
+      : environment.solarElevationFraction(tHours);
+    return SOLAR_CONSTANT_W_PER_M2 * this.areaM2 * this.efficiency
+         * this.packingFactor * this.dustDerate * phi;
+  }
+}
+
+class FissionSurfacePower {
+  constructor({
+    name = "FSP Reactor", ratedPowerW = FSP_RATED_POWER_W,
+    availability = FSP_AVAILABILITY, outageStartHours = FSP_OUTAGE_START_HOURS,
+    outageDurationHours = FSP_OUTAGE_DURATION_HOURS,
+  } = {}) {
+    Object.assign(this, { name, ratedPowerW, availability, outageStartHours, outageDurationHours });
+  }
+
+  /** Rated * availability, or 0 W inside the scripted outage window. */
+  availablePower(tHours) {
+    // Guarded on null, not on truthiness: hour 0 is a legitimate start.
+    if (this.outageStartHours !== null && this.outageStartHours !== undefined) {
+      const end = this.outageStartHours + this.outageDurationHours;
+      if (this.outageStartHours <= tHours && tHours < end) return 0.0;
+    }
+    return this.ratedPowerW * this.availability;
+  }
+}
+
+// ===== assets/storage.js ===========================================
+// storage.js — BatteryBank and RegenerativeFuelCell. Port of assets/storage.py.
+//
+// The asymmetry to keep hold of: multiply by efficiency on the way IN, divide
+// on the way OUT, and invert both again in deliverable_energy_wh. Getting one
+// of the four backwards makes a device that generates energy, which the
+// conservation identity will report immediately.
+
+
+
+class BatteryBank extends PowerStorage {
+  constructor({
+    name = "Battery Bank", capacityWh = BATTERY_CAPACITY_WH,
+    initialSoc = BATTERY_INITIAL_SOC,
+    maxChargePowerW = BATTERY_MAX_CHARGE_POWER_W,
+    maxDischargePowerW = BATTERY_MAX_DISCHARGE_POWER_W,
+    chargeEfficiency = BATTERY_CHARGE_EFFICIENCY,
+    dischargeEfficiency = BATTERY_DISCHARGE_EFFICIENCY,
+    socMin = BATTERY_SOC_MIN, socMax = BATTERY_SOC_MAX,
+  } = {}) {
+    super();
+    Object.assign(this, {
+      name, capacityWh, initialSoc, maxChargePowerW, maxDischargePowerW,
+      chargeEfficiency, dischargeEfficiency, socMin, socMax,
+    });
+    this.energyWh = initialSoc * capacityWh;
+  }
+
+  get stateOfCharge() { return this.energyWh / this.capacityWh; }
+
+  charge(powerW, dtHours) {
+    if (dtHours <= 0 || powerW <= 0) return 0.0;
+    let acceptedPowerW = Math.min(powerW, this.maxChargePowerW);
+    let energyInWh = acceptedPowerW * dtHours * this.chargeEfficiency;
+    const headroomWh = this.socMax * this.capacityWh - this.energyWh;
+    if (energyInWh > headroomWh) {          // fills mid-timestep
+      energyInWh = headroomWh;
+      acceptedPowerW = energyInWh / (dtHours * this.chargeEfficiency);
+    }
+    this.energyWh += energyInWh;
+    this.clampEnergy();
+    return acceptedPowerW;
+  }
+
+  discharge(powerW, dtHours) {
+    if (dtHours <= 0 || powerW <= 0) return 0.0;
+    let deliveredPowerW = Math.min(powerW, this.maxDischargePowerW);
+    let energyOutWh = (deliveredPowerW * dtHours) / this.dischargeEfficiency;
+    const availableWh = this.energyWh - this.socMin * this.capacityWh;
+    if (energyOutWh > availableWh) {        // hits the floor mid-timestep
+      energyOutWh = availableWh;
+      deliveredPowerW = (energyOutWh * this.dischargeEfficiency) / dtHours;
+    }
+    this.energyWh -= energyOutWh;
+    this.clampEnergy();
+    return deliveredPowerW;
+  }
+
+  get deliverableEnergyWh() {
+    const spendableWh = this.energyWh - this.socMin * this.capacityWh;
+    return Math.max(0.0, spendableWh) * this.dischargeEfficiency;
+  }
+
+  get deliverableCapacityWh() {
+    return (this.socMax - this.socMin) * this.capacityWh * this.dischargeEfficiency;
+  }
+
+  clampEnergy() {
+    const floorWh = this.socMin * this.capacityWh;
+    const ceilingWh = this.socMax * this.capacityWh;
+    this.energyWh = Math.min(Math.max(this.energyWh, floorWh), ceilingWh);
+  }
+}
+
+class RegenerativeFuelCell extends PowerStorage {
+  constructor({
+    name = "Regenerative Fuel Cell", h2CapacityKg = RFC_H2_CAPACITY_KG,
+    initialSoc = RFC_INITIAL_SOC, maxChargePowerW = RFC_MAX_CHARGE_POWER_W,
+    maxDischargePowerW = RFC_MAX_DISCHARGE_POWER_W,
+    electrolyzerEfficiency = ELECTROLYZER_EFFICIENCY,
+    fuelCellEfficiency = FUEL_CELL_EFFICIENCY,
+    specificEnergyWhPerKg = H2_SPECIFIC_ENERGY_WH_PER_KG,
+    socMin = RFC_SOC_MIN, socMax = RFC_SOC_MAX,
+  } = {}) {
+    super();
+    Object.assign(this, {
+      name, h2CapacityKg, initialSoc, maxChargePowerW, maxDischargePowerW,
+      electrolyzerEfficiency, fuelCellEfficiency, specificEnergyWhPerKg,
+      socMin, socMax,
+    });
+    this.h2MassKg = initialSoc * h2CapacityKg;
+  }
+
+  get stateOfCharge() { return this.h2MassKg / this.h2CapacityKg; }
+
+  /** Stoichiometry, reported for the mass budget; nothing dispatches on it. */
+  get o2MassKg() { return this.h2MassKg * O2_TO_H2_MASS_RATIO; }
+
+  charge(powerW, dtHours) {
+    if (dtHours <= 0 || powerW <= 0) return 0.0;
+    let acceptedPowerW = Math.min(powerW, this.maxChargePowerW);
+    const energyElecWh = acceptedPowerW * dtHours;
+    let h2GainKg = (energyElecWh * this.electrolyzerEfficiency) / this.specificEnergyWhPerKg;
+    const headroomKg = this.socMax * this.h2CapacityKg - this.h2MassKg;
+    if (h2GainKg > headroomKg) {           // tanks fill mid-timestep
+      h2GainKg = headroomKg;
+      acceptedPowerW = (h2GainKg * this.specificEnergyWhPerKg)
+                     / (dtHours * this.electrolyzerEfficiency);
+    }
+    this.h2MassKg += h2GainKg;
+    this.clampMass();
+    return acceptedPowerW;
+  }
+
+  discharge(powerW, dtHours) {
+    if (dtHours <= 0 || powerW <= 0) return 0.0;
+    let deliveredPowerW = Math.min(powerW, this.maxDischargePowerW);
+    const energyElecWh = deliveredPowerW * dtHours;
+    let h2UsedKg = energyElecWh / (this.fuelCellEfficiency * this.specificEnergyWhPerKg);
+    const availableKg = this.h2MassKg - this.socMin * this.h2CapacityKg;
+    if (h2UsedKg > availableKg) {          // tanks empty mid-timestep
+      h2UsedKg = availableKg;
+      deliveredPowerW = (h2UsedKg * this.specificEnergyWhPerKg * this.fuelCellEfficiency) / dtHours;
+    }
+    this.h2MassKg -= h2UsedKg;
+    this.clampMass();
+    return deliveredPowerW;
+  }
+
+  get deliverableEnergyWh() {
+    const spendableKg = this.h2MassKg - this.socMin * this.h2CapacityKg;
+    return Math.max(0.0, spendableKg) * this.specificEnergyWhPerKg * this.fuelCellEfficiency;
+  }
+
+  get deliverableCapacityWh() {
+    return (this.socMax - this.socMin) * this.h2CapacityKg
+         * this.specificEnergyWhPerKg * this.fuelCellEfficiency;
+  }
+
+  clampMass() {
+    const floorKg = this.socMin * this.h2CapacityKg;
+    const ceilingKg = this.socMax * this.h2CapacityKg;
+    this.h2MassKg = Math.min(Math.max(this.h2MassKg, floorKg), ceilingKg);
+  }
+}
+
+// ===== assets/loads.js =============================================
+// loads.js — the four load tiers. Port of assets/loads.py.
+
+
+
+
+class ECLSS extends Load {
+  constructor({ name = "Environmental Control and Life Support System",
+                powerW = ECLSS_POWER_W, priority = LoadPriority.CRITICAL } = {}) {
+    super();
+    Object.assign(this, { name, powerW, priority });
+  }
+  /** Flat, around the clock. Never shed. */
+  demand() { return this.powerW; }
+}
+
+class ThermalControl extends Load {
+  constructor(environment, { name = "Thermal Control",
+                            dayPowerW = THERMAL_DAY_POWER_W,
+                            nightPowerW = THERMAL_NIGHT_POWER_W,
+                            priority = LoadPriority.HIGH } = {}) {
+    super();
+    Object.assign(this, { name, dayPowerW, nightPowerW, priority, environment });
+  }
+  /** The load never goes away, it only changes job: reject heat, or add it. */
+  demand(tHours) {
+    return this.environment.isDaylight(tHours) ? this.dayPowerW : this.nightPowerW;
+  }
+}
+
+class CommsArray extends Load {
+  constructor({ name = "Communications Array",
+                activePowerW = COMMS_ACTIVE_POWER_W,
+                standbyPowerW = COMMS_STANDBY_POWER_W,
+                windowHours = COMMS_WINDOW_HOURS,
+                periodHours = COMMS_PERIOD_HOURS,
+                priority = LoadPriority.MEDIUM } = {}) {
+    super();
+    Object.assign(this, { name, activePowerW, standbyPowerW, windowHours, periodHours, priority });
+  }
+  /** One transmit window per Earth day, standby between. */
+  demand(tHours) {
+    return mod(tHours, this.periodHours) < this.windowHours
+      ? this.activePowerW : this.standbyPowerW;
+  }
+}
+
+class SciencePayload extends Load {
+  constructor({ name = "Science Payload",
+                activePowerW = SCIENCE_ACTIVE_POWER_W,
+                idlePowerW = SCIENCE_IDLE_POWER_W,
+                windowHours = SCIENCE_WINDOW_HOURS,
+                periodHours = SCIENCE_PERIOD_HOURS,
+                priority = LoadPriority.LOW } = {}) {
+    super();
+    Object.assign(this, { name, activePowerW, idlePowerW, windowHours, periodHours, priority });
+  }
+  /** Fully interruptible: drills, rovers, instruments. */
+  demand(tHours) {
+    return mod(tHours, this.periodHours) < this.windowHours
+      ? this.activePowerW : this.idlePowerW;
+  }
+}
+
+// ===== controller.js ===============================================
+// controller.js — the shed/restore policy. Port of controller.py.
+
+
+/** Python's max(seq, key=f) returns the FIRST maximum; min the first minimum.
+ *  A reduce written with >= or <= returns the LAST, which silently changes
+ *  which load is chosen whenever two share a priority. Strict comparison
+ *  keeps the first, matching Python. */
+function firstBy(items, key, better) {
+  let best = null;
+  for (const item of items) {
+    if (best === null || better(key(item), key(best))) best = item;
+  }
+  return best;
+}
+const lowestPriorityFirst = (items) =>
+  firstBy(items, (l) => l.priority, (a, b) => a > b);   // max()
+const highestPriorityFirst = (items) =>
+  firstBy(items, (l) => l.priority, (a, b) => a < b);   // min()
+
+class AutonomousController {
+  constructor({ name = "Autonomous Controller",
+                shedThreshold = SOC_SHED_THRESHOLD,
+                restoreThreshold = SOC_RESTORE_THRESHOLD,
+                minDwellHours = MIN_ACTION_DWELL_HOURS } = {}) {
+    Object.assign(this, { name, shedThreshold, restoreThreshold, minDwellHours });
+    this.lastChangeH = new Map();
+  }
+
+  /** Has this load been left alone long enough to act on again? Per-load. */
+  dwellElapsed(load, tHours) {
+    if (!this.lastChangeH.has(load.name)) return true;
+    return tHours - this.lastChangeH.get(load.name) >= this.minDwellHours;
+  }
+
+  /** At most ONE action per tick: a staircase, not a cliff. */
+  update(tHours, aggregateSoc, loads, headroomW) {
+    // 1. POWER emergency. Dwell is BYPASSED: the bus is already failing, and
+    //    an uncontrolled brownout drops loads in whatever order physics picks.
+    if (headroomW < 0.0) {
+      const candidates = loads.filter(
+        (l) => !l.shed && l.priority !== LoadPriority.CRITICAL);
+      if (!candidates.length) return null;
+      const target = lowestPriorityFirst(candidates);
+      target.shed = true;
+      this.lastChangeH.set(target.name, tHours);
+      return target;
+    }
+
+    // 2. ENERGY low. Supply still meets demand, so dwell is enforced.
+    if (aggregateSoc < this.shedThreshold) {
+      const candidates = loads.filter(
+        (l) => !l.shed && l.priority !== LoadPriority.CRITICAL
+              && this.dwellElapsed(l, tHours));
+      if (!candidates.length) return null;
+      const target = lowestPriorityFirst(candidates);
+      target.shed = true;
+      this.lastChangeH.set(target.name, tHours);
+      return target;
+    }
+
+    // 3. RECOVERY. BOTH signals must agree: reserves above the restore
+    //    threshold AND the load actually fits in the measured headroom.
+    if (aggregateSoc > this.restoreThreshold) {
+      const candidates = loads.filter(
+        (l) => l.shed && this.dwellElapsed(l, tHours)
+              && l.demand(tHours) <= headroomW);
+      if (!candidates.length) return null;
+      const target = highestPriorityFirst(candidates);
+      target.shed = false;
+      this.lastChangeH.set(target.name, tHours);
+      return target;
+    }
+
+    return null;   // inside the hysteresis dead band: deliberately idle
+  }
+}
+
+// ===== topology.js =================================================
+// topology.js — feeders and buses. Port of topology.py.
+
+
+/** 400 K in sunlight, 100 K at night. */
+function cableTemperatureK(isDaylight) {
+  return isDaylight ? CABLE_TEMP_DAY_K : CABLE_TEMP_NIGHT_K;
+}
+
+class Feeder {
+  constructor(name, lengthM, areaM2, nominalVoltageV) {
+    Object.assign(this, { name, lengthM, areaM2, nominalVoltageV });
+  }
+
+  /** Out and back. Applied here so nowhere else has to remember it. */
+  get conductorLengthM() { return 2.0 * this.lengthM; }
+
+  /** Round-trip resistance at a conductor temperature. */
+  resistanceOhm(temperatureK) {
+    const rho = CONDUCTOR_RESISTIVITY_OHM_M
+      * (1 + CONDUCTOR_TEMP_COEFF_PER_K * (temperatureK - CABLE_TEMP_REFERENCE_K));
+    return (rho * this.conductorLengthM) / this.areaM2;
+  }
+
+  /** I = P / V; 0 A for a non-positive voltage. */
+  currentA(powerW, voltageV) {
+    if (voltageV <= 0) return 0.0;
+    return powerW / voltageV;
+  }
+
+  /** Volts lost along the run at this power and temperature. */
+  voltageDropV(powerW, voltageV, temperatureK) {
+    return this.currentA(powerW, voltageV) * this.resistanceOhm(temperatureK);
+  }
+
+  /** I^2 R dissipated in the conductor. */
+  lossW(powerW, voltageV, temperatureK) {
+    const i = this.currentA(powerW, voltageV);
+    return i * i * this.resistanceOhm(temperatureK);
+  }
+
+  /** Conductor mass for the whole run, both directions. */
+  conductorMassKg() {
+    return CONDUCTOR_DENSITY_KG_PER_M3 * this.areaM2 * this.conductorLengthM;
+  }
+
+  /** Area meeting a loss budget, floored at the minimum gauge.
+   *  Sized at the REFERENCE temperature, deliberately: a cable at 400 K needs
+   *  1.43x this area for the same budget, and burying that choice would hide
+   *  a real design decision. */
+  static sizeForLossBudget(powerW, voltageV, lengthM, lossFraction) {
+    const a = (powerW * CONDUCTOR_RESISTIVITY_OHM_M * (2 * lengthM))
+            / (lossFraction * voltageV * voltageV);
+    return Math.max(a, MIN_CONDUCTOR_AREA_M2);
+  }
+}
+
+class DCBus {
+  constructor(name, nominalVoltageV, feeders = []) {
+    Object.assign(this, { name, nominalVoltageV, feeders });
+  }
+
+  /** A feeder absent from the map is idle, not an error. */
+  totalLossW(powerByFeeder, temperatureK) {
+    return this.feeders.reduce(
+      (sum, f) => sum + f.lossW(powerByFeeder[f.name] ?? 0.0,
+                                f.nominalVoltageV, temperatureK), 0.0);
+  }
+
+  totalConductorMassKg() {
+    return this.feeders.reduce((sum, f) => sum + f.conductorMassKg(), 0.0);
+  }
+
+  feeder(name) {
+    const found = this.feeders.find((f) => f.name === name);
+    if (!found) throw new Error(`no feeder named ${name} on bus ${this.name}`);
+    return found;
+  }
+}
+
+// NAMES MUST MATCH buildOutpost EXACTLY. A feeder is bound to its asset by
+// name and a mismatch is SILENT — the asset simply gets no feeder and reports
+// 0.0 W forever. That is defect D-03, which left a 1 km reactor link unused
+// while every total still looked plausible.
+const USER_BUS_LAYOUT = [
+  ["PV Array", 50.0, 34900.0],
+  ["Battery Bank", 10.0, 50000.0],
+  ["Regenerative Fuel Cell", 20.0, 25000.0],
+  ["Environmental Control and Life Support System", 5.0, 6500.0],
+  ["Thermal Control", 10.0, 5500.0],
+  ["Communications Array", 30.0, 2500.0],
+  ["Science Payload", 60.0, 6000.0],
+];
+
+const PROVISIONAL_AREA_M2 = 1.0e-5;
+
+function buildTopology(sized = false, lossFraction = MAX_FEEDER_LOSS_FRACTION) {
+  const area = (powerW, lengthM, voltageV) =>
+    sized ? Feeder.sizeForLossBudget(powerW, voltageV, lengthM, lossFraction)
+          : PROVISIONAL_AREA_M2;
+
+  const user = new DCBus("user", USER_BUS_VOLTAGE_V,
+    USER_BUS_LAYOUT.map(([name, lengthM, peakW]) =>
+      new Feeder(name, lengthM, area(peakW, lengthM, USER_BUS_VOLTAGE_V), USER_BUS_VOLTAGE_V)));
+
+  const transmission = new DCBus("transmission", TRANSMISSION_VOLTAGE_V, [
+    new Feeder("FSP Reactor", FSP_SEPARATION_M,
+      area(FSP_RATED_POWER_W, FSP_SEPARATION_M, TRANSMISSION_VOLTAGE_V),
+      TRANSMISSION_VOLTAGE_V),
+  ]);
+  return [user, transmission];
+}
+
+/** Feeders exceeding the 100 m ISPSIS limitation. Reports, never asserts. */
+function overSpanLimit(bus) {
+  if (bus.nominalVoltageV > USER_BUS_VOLTAGE_V) return [];
+  return bus.feeders.filter((f) => f.lengthM > USER_BUS_MAX_SPAN_M).map((f) => f.name);
+}
+
+// ===== converters.js ===============================================
+// converters.js — power electronics. Port of converters.py.
+//
+// Multiply on the way out, DIVIDE on the way in. The same asymmetry as the
+// battery round trip; reversed, a converter becomes a source of power.
+
+
+class Converter {
+  constructor(name, efficiency = CONVERTER_EFFICIENCY, ratedW = 0.0) {
+    if (!(efficiency > 0.0 && efficiency <= 1.0)) {
+      throw new Error(`${name}: efficiency ${efficiency} outside (0, 1]`);
+    }
+    Object.assign(this, { name, efficiency, ratedW });
+    Object.freeze(this);
+  }
+  /** Asset supplies this much; the bus receives less. */
+  deliveredW(assetPowerW) { return assetPowerW * this.efficiency; }
+  /** Asset needs this much; the bus must send more. */
+  drawnW(assetPowerW) { return assetPowerW / this.efficiency; }
+  lossSupplyingW(assetPowerW) { return assetPowerW - this.deliveredW(assetPowerW); }
+  lossDrawingW(assetPowerW) { return this.drawnW(assetPowerW) - assetPowerW; }
+}
+
+/** One converter per asset, derived FROM the bus rather than a restated list,
+ *  so an asset added to the outpost cannot end up without power electronics. */
+function buildConverters(bus, efficiency = CONVERTER_EFFICIENCY) {
+  const converters = new Map();
+  for (const a of [...bus.sources, ...bus.storage, ...bus.loads]) {
+    converters.set(a.name, new Converter(a.name, efficiency));
+  }
+  return converters;
+}
+
+// ===== powerBus.js =================================================
+// powerBus.js — one tick, and the accounting that proves it balanced.
+// Port of power_bus.py.
+//
+// The identity this must preserve, every tick:
+//   generation + discharged == served + charged + curtailed + losses
+
+
+
+class PowerBus {
+  constructor({ sources, storage, loads, controller, environment,
+                buses = null, converters = null }) {
+    Object.assign(this, { sources, storage, loads, controller, environment });
+    this.buses = buses ?? [];
+    this.feedersByName = new Map();
+    for (const bus of this.buses) {
+      for (const f of bus.feeders) this.feedersByName.set(f.name, f);
+    }
+    this.converters = converters ?? new Map();
+  }
+
+  /** Loss in the feeder serving `name`; 0.0 with no topology wired. */
+  feederLossW(name, powerW, temperatureK) {
+    const feeder = this.feedersByName.get(name);
+    if (!feeder || powerW <= 0.0) return 0.0;
+    return feeder.lossW(powerW, feeder.nominalVoltageV, temperatureK);
+  }
+
+  /** Asset supplies; what reaches the bus. Converter first, feeder second. */
+  supplyToBus(name, assetPowerW, temperatureK) {
+    const converter = this.converters.get(name);
+    const afterConverterW = converter ? converter.deliveredW(assetPowerW) : assetPowerW;
+    const converterLossW = assetPowerW - afterConverterW;
+    const feederLossW = this.feederLossW(name, afterConverterW, temperatureK);
+    return [afterConverterW - feederLossW, converterLossW, feederLossW];
+  }
+
+  /** Asset needs; what the bus must send. Multiply out, DIVIDE in. */
+  drawFromBus(name, assetPowerW, temperatureK) {
+    const converter = this.converters.get(name);
+    const beforeConverterW = converter ? converter.drawnW(assetPowerW) : assetPowerW;
+    const converterLossW = beforeConverterW - assetPowerW;
+    const feederLossW = this.feederLossW(name, beforeConverterW, temperatureK);
+    return [beforeConverterW + feederLossW, converterLossW, feederLossW];
+  }
+
+  /** Capacity-weighted, never a mean of the devices' state_of_charge. */
+  get aggregateSoc() {
+    const capacityWh = this.storage.reduce((s, d) => s + d.deliverableCapacityWh, 0.0);
+    if (capacityWh <= 0.0) return 0.0;
+    const energyWh = this.storage.reduce((s, d) => s + d.deliverableEnergyWh, 0.0);
+    return energyWh / capacityWh;
+  }
+
+  storagePowerCeilingW(dtHours) {
+    return this.storage.reduce((s, d) => s + d.availableDischargePowerW(dtHours), 0.0);
+  }
+
+  dispatchSurplus(surplusW, dtHours, temperatureK) {
+    let remainingW = surplusW;
+    let absorbedW = 0.0, converterLossW = 0.0, feederLossW = 0.0;
+    const flows = {};
+    for (const device of this.storage) {
+      // Offer only what SURVIVES the trip. Offering the raw remainder lets a
+      // device accept power the bus cannot deliver — defect D-04, which the
+      // clamp then hid as a 1.6 kW conservation residual.
+      const converter = this.converters.get(device.name);
+      const eta = converter ? converter.efficiency : 1.0;
+      const roughW = remainingW * eta;
+      const [, , trialFeederW] = this.drawFromBus(device.name, roughW, temperatureK);
+      const offerW = Math.max(0.0, (remainingW - trialFeederW) * eta);
+
+      const acceptedW = device.charge(offerW, dtHours);
+      const [costW, convLoss, feedLoss] =
+        this.drawFromBus(device.name, acceptedW, temperatureK);
+
+      flows[device.name] = acceptedW;
+      absorbedW += acceptedW;
+      converterLossW += convLoss;
+      feederLossW += feedLoss;
+      remainingW -= costW;
+    }
+    return [absorbedW, remainingW, flows, converterLossW, feederLossW];
+  }
+
+  dispatchDeficit(deficitW, dtHours, temperatureK) {
+    let remainingW = deficitW;
+    let deliveredW = 0.0, converterLossW = 0.0, feederLossW = 0.0;
+    const flows = {};
+    for (const device of this.storage) {
+      const suppliedW = device.discharge(remainingW, dtHours);
+      const [arrivedW, convLoss, feedLoss] =
+        this.supplyToBus(device.name, suppliedW, temperatureK);
+      flows[device.name] = -suppliedW;        // signed: out of the device
+      deliveredW += suppliedW;
+      converterLossW += convLoss;
+      feederLossW += feedLoss;
+      remainingW = Math.max(0.0, remainingW - arrivedW);
+    }
+    return [deliveredW, remainingW, flows, converterLossW, feederLossW];
+  }
+
+  /** Advance one tick: measure, decide, re-measure, dispatch, record. */
+  step(tHours, dtHours = TIME_STEP_HOURS) {
+    const isDaylight = this.environment.isDaylight(tHours);
+    const cableK = cableTemperatureK(isDaylight);
+
+    // 1. MEASURE — at the BUS, which is where the controller lives.
+    const soc = this.aggregateSoc;
+    const ceilingW = this.storagePowerCeilingW(dtHours);
+
+    const genBySource = new Map();
+    for (const source of this.sources) {
+      genBySource.set(source.name, source.availablePower(tHours, this.environment));
+    }
+    let generationW = 0.0;
+    for (const v of genBySource.values()) generationW += v;
+
+    let generationBusW = 0.0, genConvLossW = 0.0, genFeedLossW = 0.0;
+    for (const [name, powerW] of genBySource) {
+      const [busW, convW, feedW] = this.supplyToBus(name, powerW, cableK);
+      generationBusW += busW;
+      genConvLossW += convW;
+      genFeedLossW += feedW;
+    }
+
+    const demandAtBus = () => {
+      let total = 0.0, conv = 0.0, feed = 0.0;
+      for (const load of this.loads) {
+        const [busW, c, f] =
+          this.drawFromBus(load.name, load.effectiveDemand(tHours), cableK);
+        total += busW; conv += c; feed += f;
+      }
+      return [total, conv, feed];
+    };
+
+    const [connectedBusW] = demandAtBus();
+    const headroomW = generationBusW + ceilingW - connectedBusW;
+
+    // 2. DECIDE — on signals measured a moment ago, never remembered.
+    const action = this.controller.update(tHours, soc, this.loads, headroomW);
+
+    // 3. RE-MEASURE — the controller may have shed or restored a load.
+    let demandW = 0.0;
+    for (const load of this.loads) demandW += load.effectiveDemand(tHours);
+    const [demandBusW, loadConvLossW, loadFeedLossW] = demandAtBus();
+    const netW = generationBusW - demandBusW;
+
+    // 4. DISPATCH — at most one charge or discharge call per device.
+    let chargedW = 0.0, dischargedW = 0.0, curtailedW = 0.0, shortfallW = 0.0;
+    let storeConvLossW = 0.0, storeFeedLossW = 0.0;
+    let flows = {};
+    for (const d of this.storage) flows[d.name] = 0.0;
+
+    if (netW > 0.0) {
+      [chargedW, curtailedW, flows, storeConvLossW, storeFeedLossW] =
+        this.dispatchSurplus(netW, dtHours, cableK);
+    } else if (netW < 0.0) {
+      [dischargedW, shortfallW, flows, storeConvLossW, storeFeedLossW] =
+        this.dispatchDeficit(-netW, dtHours, cableK);
+    }
+
+    const converterLossW = genConvLossW + loadConvLossW + storeConvLossW;
+    const feederLossW = genFeedLossW + loadFeedLossW + storeFeedLossW;
+    const lossesW = converterLossW + feederLossW;
+
+    // 5. RECORD
+    const record = {
+      t_hours: tHours,
+      is_daylight: isDaylight,
+      generation_w: generationW,
+      demand_w: demandW,
+      headroom_w: headroomW,
+      served_w: demandW - shortfallW,
+      net_w: netW,
+      charged_w: chargedW,
+      discharged_w: dischargedW,
+      curtailed_w: curtailedW,
+      shortfall_w: shortfallW,
+      aggregate_soc: soc,
+      storage_ceiling_w: ceilingW,
+      action: action === null ? null : action.name,
+      n_shed: this.loads.filter((l) => l.shed).length,
+      cable_temperature_k: cableK,
+      generation_bus_w: generationBusW,
+      demand_bus_w: demandBusW,
+      gen_loss_w: genFeedLossW,
+      load_loss_w: loadFeedLossW,
+      storage_loss_w: storeFeedLossW,
+      feeder_loss_w: feederLossW,
+      converter_loss_w: converterLossW,
+      losses_w: lossesW,
+    };
+    for (const source of this.sources) {
+      record[`gen:${source.name}`] = genBySource.get(source.name);
+      record[`floss:${source.name}`] =
+        this.feederLossW(source.name, genBySource.get(source.name), cableK);
+    }
+    for (const device of this.storage) {
+      record[`soc:${device.name}`] = device.stateOfCharge;
+      record[`flow:${device.name}`] = flows[device.name];
+      record[`floss:${device.name}`] =
+        this.feederLossW(device.name, Math.abs(flows[device.name]), cableK);
+    }
+    for (const load of this.loads) {
+      record[`load:${load.name}`] = load.effectiveDemand(tHours);
+      record[`shed:${load.name}`] = load.shed;
+      record[`floss:${load.name}`] =
+        this.feederLossW(load.name, load.effectiveDemand(tHours), cableK);
+    }
+    return record;
+  }
+}
+
+// ===== engine.js ===================================================
+// engine.js — the loop around a tick. Port of simulation_engine.py.
+
+
+class SimulationEngine {
+  constructor(bus, durationHours = SIM_DURATION_HOURS, dtHours = TIME_STEP_HOURS) {
+    Object.assign(this, { bus, durationHours, dtHours });
+    this.history = [];
+  }
+
+  get nSteps() { return Math.trunc(this.durationHours / this.dtHours); }
+
+  /** t is i*dt, NEVER an accumulator. Adding dt 1440 times drifts; multiplying
+   *  does not, and a clock that drifts puts the terminator in the wrong place. */
+  run() {
+    this.history = [];
+    for (let i = 0; i < this.nSteps; i++) {
+      this.history.push(this.bus.step(i * this.dtHours, this.dtHours));
+    }
+    return this.history;
+  }
+
+  summary() {
+    if (!this.history.length) throw new Error("nothing to summarize — call run() first");
+    const dt = this.dtHours;
+    const sum = (key) => this.history.reduce((s, r) => s + r[key], 0.0);
+    return {
+      hours: this.durationHours,
+      steps: this.history.length,
+      generated_kwh: (sum("generation_w") * dt) / 1000.0,
+      served_kwh: (sum("served_w") * dt) / 1000.0,
+      unserved_kwh: (sum("shortfall_w") * dt) / 1000.0,
+      curtailed_kwh: (sum("curtailed_w") * dt) / 1000.0,
+      min_aggregate_soc: Math.min(...this.history.map((r) => r.aggregate_soc)),
+      min_headroom_w: Math.min(...this.history.map((r) => r.headroom_w)),
+      actions: this.history.filter((r) => r.action).length,
+    };
+  }
+}
+
+// ===== outpost.js ==================================================
+// outpost.js — the parts list. Port of main.build_outpost.
+//
+// The ONLY module that names a concrete class, exactly as in Python. Everything
+// else sees interfaces, which is what lets the same engine run a different
+// outpost without being edited.
+
+
+
+
+
+
+
+
+
+/** Assemble the standard outpost; storage ORDER is the merit order. */
+function buildOutpost(environment, outageStartHours = null,
+                            topology = false, converters = false) {
+  const bus = new PowerBus({
+    sources: [
+      new PVArray(),
+      new FissionSurfacePower({
+        outageStartHours,
+        outageDurationHours: FSP_OUTAGE_DURATION_HOURS,
+      }),
+    ],
+    storage: [
+      new BatteryBank(),            // efficient and fast — cycled first
+      new RegenerativeFuelCell(),   // lossy and deep — held for the night
+    ],
+    loads: [
+      new ECLSS(),
+      new ThermalControl(environment),
+      new CommsArray(),
+      new SciencePayload(),
+    ],
+    controller: new AutonomousController(),
+    environment,
+    buses: topology ? buildTopology(true) : null,
+  });
+  if (converters) {
+    // Built FROM the assembled bus, never a restated list — defect D-03.
+    bus.converters = buildConverters(bus);
+  }
+  return bus;
+}
+
+
+/* ==========================================================================
+   The console. Everything above this line is the simulation core, byte for
+   byte the same modules that pass web/conformance.html — so what this page
+   draws is what the Python model computes.
+   ========================================================================== */
+
+const SHORT = {
+  "Environmental Control and Life Support System": "ECLSS",
+  "Regenerative Fuel Cell": "Fuel cell",
+  "Communications Array": "Comms",
+  "Science Payload": "Science",
+  "Battery Bank": "Battery",
+  "FSP Reactor": "Reactor",
+  "PV Array": "PV array",
+  "Thermal Control": "Thermal",
+};
+
+// x positions on the one-line. Sources feed down onto the bus; storage and
+// loads drop below it, grouped so the two roles read apart at a glance.
+const LAYOUT = {
+  "PV Array":                                     { x: 210, role: "source" },
+  "FSP Reactor":                                  { x: 800, role: "source", remote: true },
+  "Battery Bank":                                 { x: 128, role: "storage" },
+  "Regenerative Fuel Cell":                       { x: 266, role: "storage" },
+  "Environmental Control and Life Support System":{ x: 452, role: "load" },
+  "Thermal Control":                              { x: 574, role: "load" },
+  "Communications Array":                         { x: 696, role: "load" },
+  "Science Payload":                              { x: 818, role: "load" },
+};
+
+const BUS_Y = 250, DROP_Y = 336, SW_Y = 288, NAME_Y = 404, VAL_Y = 420;
+
+const $ = (id) => document.getElementById(id);
+const kW = (w) => (w / 1000).toFixed(2);
+
+let state = { history: [], summary: null, tick: 0, playing: false, raf: null };
+
+/* ---- build and run ------------------------------------------------------- */
+function rebuild() {
+  const outage = $("outage").checked ? 500.0 : null;
+  const topo = $("topology").checked;
+  const conv = $("converters").checked;
+  const area = Number($("pv").value);
+
+  const env = new LunarEnvironment();
+  const bus = buildOutpost(env, outage, topo, conv);
+  bus.sources[0].areaM2 = area;           // the one live design parameter
+
+  const engine = new SimulationEngine(bus);
+  engine.run();
+  state.history = engine.history;
+  state.summary = engine.summary();
+
+  const feederLoss = engine.history.reduce((s, r) => s + r.feeder_loss_w, 0) / 1000;
+  const convLoss = engine.history.reduce((s, r) => s + r.converter_loss_w, 0) / 1000;
+  const s = state.summary;
+  $("tGen").textContent = s.generated_kwh.toFixed(1) + " kWh";
+  $("tServed").textContent = s.served_kwh.toFixed(1) + " kWh";
+  $("tUnserved").textContent = s.unserved_kwh.toFixed(1) + " kWh";
+  $("tUnserved").className = s.unserved_kwh > 0 ? "bad" : "good";
+  $("tCurt").textContent = s.curtailed_kwh.toFixed(1) + " kWh";
+  $("tFeed").textContent = topo ? feederLoss.toFixed(1) + " kWh" : "not modelled";
+  $("tConv").textContent = conv ? convLoss.toFixed(1) + " kWh" : "not modelled";
+  $("tActions").textContent = String(s.actions);
+
+  $("foot").innerHTML = footnote(topo, conv, s);
+  drawStatic();
+  render();
+}
+
+function footnote(topo, conv, s) {
+  const bits = [];
+  if (s.unserved_kwh > 0) {
+    bits.push(`This outpost misses its load by <strong>${s.unserved_kwh.toFixed(1)} kWh</strong>.`);
+  } else {
+    bits.push("This outpost meets its load for the whole run.");
+  }
+  if (!topo && !conv) {
+    bits.push("With no conductors and no power electronics modelled, it is a pure power balance — which is how it looked before the electrical layer existed.");
+  } else if (topo && !conv) {
+    bits.push("Conductors only: the copper costs something, the silicon is still free.");
+  } else if (!topo && conv) {
+    bits.push("Converters only — and they cost more than the copper does.");
+  } else {
+    bits.push("Conductors and converters both. Together they lose about a fifth of everything generated.");
+  }
+  return bits.join(" ");
+}
+
+/* ---- the drawing --------------------------------------------------------- */
+function symbol(name, role, x) {
+  // Conventional one-line glyphs rather than boxes with words in them.
+  const g = [];
+  if (name === "PV Array") {
+    g.push(`<rect class="sym" id="sym-pv" x="${x - 30}" y="46" width="60" height="40" rx="2"/>`);
+    g.push(`<path class="glyph" id="gl-pv" d="M${x - 30} 86 L${x + 30} 46 M${x - 10} 86 L${x + 30} 60 M${x - 30} 72 L${x + 10} 46"/>`);
+  } else if (name === "FSP Reactor") {
+    g.push(`<circle class="sym" id="sym-fsp" cx="${x}" cy="66" r="25"/>`);
+    g.push(`<circle class="glyph" id="gl-fsp" cx="${x}" cy="66" r="6"/>`);
+    g.push(`<path class="glyph" d="M${x - 15} 55 A 18 18 0 0 1 ${x + 15} 55" opacity=".7"/>`);
+  } else if (role === "storage" && name.startsWith("Battery")) {
+    g.push(`<rect class="sym" x="${x - 26}" y="${DROP_Y}" width="52" height="46" rx="2"/>`);
+    for (let i = 0; i < 3; i++) {
+      const yy = DROP_Y + 12 + i * 11;
+      g.push(`<line class="glyph" x1="${x - 16}" y1="${yy}" x2="${x + 16}" y2="${yy}" stroke-width="${i % 2 ? 1.2 : 3}"/>`);
+    }
+  } else if (role === "storage") {
+    g.push(`<rect class="sym" x="${x - 26}" y="${DROP_Y}" width="52" height="46" rx="2"/>`);
+    g.push(`<path class="glyph" d="M${x - 14} ${DROP_Y + 32} q7 -22 14 -11 q7 11 14 -11"/>`);
+    g.push(`<line class="glyph" x1="${x - 14}" y1="${DROP_Y + 38}" x2="${x + 14}" y2="${DROP_Y + 38}" opacity=".6"/>`);
+  } else {
+    // Load: the standard downward triangle.
+    g.push(`<path class="sym" d="M${x - 24} ${DROP_Y + 4} L${x + 24} ${DROP_Y + 4} L${x} ${DROP_Y + 44} Z"/>`);
+  }
+  return g.join("");
+}
+
+function drawStatic() {
+  const env = new LunarEnvironment();
+  const [userBus, transBus] = buildTopology(true);
+  const feeders = new Map();
+  for (const b of [userBus, transBus]) for (const f of b.feeders) feeders.set(f.name, f);
+
+  const p = [];
+  p.push(`<defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5"
+            markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>`);
+
+  // Busbar
+  p.push(`<line class="busline" x1="62" y1="${BUS_Y}" x2="938" y2="${BUS_Y}"/>`);
+  p.push(`<text class="eyebrow" x="62" y="${BUS_Y - 14}">USER BUS · 120 VDC · ISPSIS</text>`);
+  p.push(`<text class="annot" x="938" y="${BUS_Y - 14}" text-anchor="end" id="busState">energised</text>`);
+
+  // Group eyebrows
+  p.push(`<text class="eyebrow" x="128" y="${VAL_Y + 40}">STORAGE</text>`);
+  p.push(`<text class="eyebrow" x="452" y="${VAL_Y + 40}">LOADS</text>`);
+  p.push(`<line x1="352" y1="${BUS_Y + 26}" x2="352" y2="${VAL_Y + 30}" stroke="var(--hair)" stroke-dasharray="2 5"/>`);
+
+  for (const [name, cfg] of Object.entries(LAYOUT)) {
+    const x = cfg.x, id = slug(name);
+    const f = feeders.get(name);
+
+    if (cfg.role === "source") {
+      if (cfg.remote) {
+        // The reactor is 1 km out for NUCLEAR reasons, behind a 1000 V link
+        // and a converter. That asymmetry is the whole architecture.
+        p.push(`<line class="feeder" id="fd-${id}" x1="${x}" y1="91" x2="${x}" y2="${BUS_Y}"/>`);
+        p.push(`<path class="glyph" d="M${x - 7} 132 l14 -7 M${x - 7} 142 l14 -7" opacity=".85"/>`);
+        p.push(`<text class="annot" x="${x + 16}" y="130">1000 VDC</text>`);
+        p.push(`<text class="annot" x="${x + 16}" y="144">1 km — FSP standoff</text>`);
+        p.push(`<rect class="sym" x="${x - 19}" y="176" width="38" height="30" rx="2"/>`);
+        p.push(`<line class="glyph" x1="${x - 12}" y1="201" x2="${x + 12}" y2="181"/>`);
+        p.push(`<text class="annot" x="${x + 26}" y="196">1000→120</text>`);
+      } else {
+        p.push(`<line class="feeder" id="fd-${id}" x1="${x}" y1="86" x2="${x}" y2="${BUS_Y}"/>`);
+      }
+      p.push(symbol(name, cfg.role, x));
+      // Label ABOVE the symbol and value BESIDE the conductor: centred on x,
+      // both would sit on top of the feeder line they annotate.
+      p.push(`<text class="lbl" x="${x}" y="${cfg.remote ? 30 : 36}" text-anchor="middle">${SHORT[name]}</text>`);
+      p.push(`<text class="val" x="${x + 14}" y="${cfg.remote ? 232 : 170}" id="v-${id}">—</text>`);
+    } else {
+      p.push(`<line class="feeder" id="fd-${id}" x1="${x}" y1="${BUS_Y}" x2="${x}" y2="${DROP_Y + 4}"/>`);
+      // SSPC — solid-state, because a DC fault has no current zero for a
+      // mechanical contact to exploit.
+      p.push(`<rect class="sym" id="sw-${id}" x="${x - 9}" y="${SW_Y - 9}" width="18" height="18" rx="2"/>`);
+      p.push(`<line class="glyph" id="swl-${id}" x1="${x - 5}" y1="${SW_Y + 5}" x2="${x + 5}" y2="${SW_Y - 5}"/>`);
+      p.push(symbol(name, cfg.role, x));
+      p.push(`<text class="lbl" x="${x}" y="${NAME_Y}" text-anchor="middle">${SHORT[name]}</text>`);
+      p.push(`<text class="val" x="${x}" y="${VAL_Y}" text-anchor="middle" id="v-${id}">—</text>`);
+      p.push(`<text class="chip" x="${x}" y="${VAL_Y + 15}" text-anchor="middle" id="chip-${id}"></text>`);
+      if (f) {
+        p.push(`<text class="annot" x="${x + 13}" y="${SW_Y + 22}" id="i-${id}">—</text>`);
+      }
+    }
+  }
+  $("sld").innerHTML = p.join("\n");
+}
+
+const slug = (s) => s.replace(/[^A-Za-z0-9]/g, "");
+
+/* ---- per-tick render ----------------------------------------------------- */
+function render() {
+  const r = state.history[state.tick];
+  if (!r) return;
+
+  $("clock").textContent = String(Math.round(r.t_hours)).padStart(4, "0") + " h";
+  const ph = $("phase");
+  ph.className = "phase" + (r.is_daylight ? "" : " night");
+  ph.innerHTML = `<span class="dot"></span>${r.is_daylight ? "lunar day" : "lunar night"}`;
+  $("scrub").value = state.tick;
+  $("scrubVal").textContent = `${state.tick} / 1439`;
+
+  // Two signals
+  const soc = r.aggregate_soc;
+  $("socVal").textContent = soc.toFixed(4);
+  $("socFill").style.width = (soc * 100).toFixed(1) + "%";
+  $("socFill").style.background = soc < SOC_SHED_THRESHOLD ? "var(--red)" : "var(--blue)";
+  $("deadband").style.left = (SOC_SHED_THRESHOLD * 100) + "%";
+  $("deadband").style.width = ((SOC_RESTORE_THRESHOLD - SOC_SHED_THRESHOLD) * 100) + "%";
+  $("socNote").textContent = soc < SOC_SHED_THRESHOLD ? "below the shed threshold"
+    : soc < SOC_RESTORE_THRESHOLD ? "inside the hysteresis dead band"
+    : "reserve healthy";
+
+  const hr = r.headroom_w, span = 60000;
+  const pct = Math.max(0, Math.min(100, ((hr + span) / (2 * span)) * 100));
+  $("hrVal").textContent = (hr >= 0 ? "+" : "") + kW(hr) + " kW";
+  $("hrFill").style.width = pct.toFixed(1) + "%";
+  $("hrFill").style.background = hr < 0 ? "var(--red)" : "var(--green)";
+  $("hrNote").textContent = hr < 0
+    ? "NEGATIVE — the bus cannot meet demand"
+    : `fleet can still deliver ${kW(r.storage_ceiling_w)} kW`;
+
+  const failing = r.shortfall_w > 0;
+  const busState = document.getElementById("busState");
+  if (busState) {
+    busState.textContent = failing ? `UNSERVED ${kW(r.shortfall_w)} kW` : "energised";
+    busState.setAttribute("fill", failing ? "var(--red)" : "var(--soft)");
+  }
+  document.querySelector(".busline").setAttribute("stroke",
+    failing ? "var(--red)" : "var(--bus)");
+
+  for (const [name, cfg] of Object.entries(LAYOUT)) {
+    const id = slug(name);
+    const fd = document.getElementById(`fd-${id}`);
+    const val = document.getElementById(`v-${id}`);
+    const cur = document.getElementById(`i-${id}`);
+    const chip = document.getElementById(`chip-${id}`);
+    const sw = document.getElementById(`sw-${id}`);
+    const swl = document.getElementById(`swl-${id}`);
+
+    let flowW = 0, text = "", shed = false, charging = false;
+
+    if (cfg.role === "source") {
+      flowW = r[`gen:${name}`] ?? 0;
+      text = kW(flowW) + " kW";
+      if (name === "FSP Reactor" && flowW === 0) text = "OUT";
+    } else if (cfg.role === "storage") {
+      const f = r[`flow:${name}`] ?? 0;
+      flowW = Math.abs(f);
+      charging = f > 0;
+      const socD = r[`soc:${name}`] ?? 0;
+      text = `${(socD * 100).toFixed(0)}%  ${f === 0 ? "idle" : (charging ? "+" : "−") + kW(flowW)}`;
+    } else {
+      shed = r[`shed:${name}`] === true;
+      flowW = r[`load:${name}`] ?? 0;
+      text = shed ? "shed" : kW(flowW) + " kW";
+      if (chip) chip.textContent = shed ? "OFF" : "";
+    }
+
+    if (val) val.textContent = text;
+    if (cur) {
+      const v = cfg.remote ? TRANSMISSION_VOLTAGE_V : USER_BUS_VOLTAGE_V;
+      cur.textContent = flowW > 0 ? (flowW / v).toFixed(0) + " A" : "";
+    }
+    if (fd) {
+      fd.className.baseVal = "feeder"
+        + (shed ? " shedout" : flowW > 0 ? (charging ? " charge" : " live") : "");
+    }
+    if (sw) sw.className.baseVal = "sym" + (shed ? " off" : flowW > 0 ? " on" : "");
+    if (swl) {
+      // An open SSPC is drawn as a lifted contact, which is what "shed" means.
+      swl.setAttribute("transform", shed ? `rotate(-32 ${cfg.x} ${SW_Y})` : "");
+      swl.className.baseVal = "glyph" + (shed ? " off" : flowW > 0 ? " on" : "");
+    }
+    const symOn = document.getElementById(name === "PV Array" ? "sym-pv"
+                : name === "FSP Reactor" ? "sym-fsp" : null);
+    if (symOn) symOn.className.baseVal = "sym" + (flowW > 0 ? " on" : " off");
+    const glOn = document.getElementById(name === "PV Array" ? "gl-pv"
+               : name === "FSP Reactor" ? "gl-fsp" : null);
+    if (glOn) glOn.className.baseVal = "glyph" + (flowW > 0 ? " on" : " off");
+  }
+}
+
+/* ---- transport ----------------------------------------------------------- */
+let lastFrame = 0;
+function tickLoop(ts) {
+  if (!state.playing) return;
+  if (ts - lastFrame > 40) {
+    lastFrame = ts;
+    state.tick = (state.tick + 1) % state.history.length;
+    render();
+  }
+  state.raf = requestAnimationFrame(tickLoop);
+}
+$("play").addEventListener("click", () => {
+  state.playing = !state.playing;
+  $("play").textContent = state.playing ? "Pause" : "Play";
+  if (state.playing) state.raf = requestAnimationFrame(tickLoop);
+  else cancelAnimationFrame(state.raf);
+});
+$("scrub").addEventListener("input", (e) => {
+  state.tick = Number(e.target.value);
+  render();
+});
+for (const id of ["outage", "topology", "converters"]) {
+  $(id).addEventListener("change", rebuild);
+}
+$("pv").addEventListener("input", (e) => {
+  $("pvVal").textContent = e.target.value + " m²";
+  rebuild();
+});
+
+$("pvVal").textContent = $("pv").value + " m²";
+rebuild();
+</script>

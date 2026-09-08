@@ -1,0 +1,572 @@
+<title>Lunar Outpost One-Line</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  /* ---- tokens: complete light palette on bare :root ---------------------- */
+  :root {
+    --bg:        #eef1f4;
+    --panel:     #fafbfc;
+    --panel-2:   #f2f5f7;
+    --ink:       #12161c;
+    --soft:      #58626f;
+    --faint:     #c3ccd6;
+    --hair:      #dde3ea;
+
+    /* The repo's own measured palette. Chosen by CIEDE2000 separation under
+       protanopia/deuteranopia/tritanopia plus WCAG 1.4.11 contrast, so the
+       console and the figures in docs/ are one system. */
+    --blue:   #1963a4;
+    --orange: #d67510;
+    --green:  #2ba07e;
+    --red:    #b13328;
+
+    --grid:      #d7dee6;
+    --bus:       #12161c;
+    --shadow:    0 1px 2px rgba(18,22,28,.06), 0 8px 24px rgba(18,22,28,.05);
+    --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  :root:not([data-theme="light"]) { }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:      #0e1218;
+      --panel:   #161b23;
+      --panel-2: #1b212a;
+      --ink:     #e7edf4;
+      --soft:    #94a1b2;
+      --faint:   #333d4a;
+      --hair:    #232b35;
+      --blue:    #207db6;
+      --orange:  #fea12d;
+      --green:   #3ec69d;
+      --red:     #e22e31;
+      --grid:    #232b35;
+      --bus:     #cbd6e2;
+      --shadow:  0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:      #0e1218;  --panel: #161b23; --panel-2: #1b212a;
+    --ink:     #e7edf4;  --soft:  #94a1b2; --faint:   #333d4a; --hair: #232b35;
+    --blue:    #207db6;  --orange:#fea12d; --green:   #3ec69d; --red:  #e22e31;
+    --grid:    #232b35;  --bus:   #cbd6e2;
+    --shadow:  0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--font-sans); font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 20px 56px; }
+
+  /* ---- masthead ---------------------------------------------------------- */
+  header { display: flex; flex-wrap: wrap; align-items: flex-end;
+           justify-content: space-between; gap: 16px 24px; margin-bottom: 20px; }
+  h1 { font-size: 25px; font-weight: 700; letter-spacing: -.02em; margin: 0;
+       text-wrap: balance; }
+  .sub { color: var(--soft); margin: 5px 0 0; max-width: 56ch; }
+  .clock { font-family: var(--font-mono); text-align: right; }
+  .clock .t { font-size: 27px; font-weight: 500; letter-spacing: -.02em;
+              font-variant-numeric: tabular-nums; display: block; }
+  .phase { font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+           color: var(--soft); }
+  .phase .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+                background: var(--orange); margin-right: 6px; vertical-align: 1px; }
+  .phase.night .dot { background: var(--blue); }
+
+  /* ---- the two signals --------------------------------------------------- */
+  .signals { display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+             margin-bottom: 16px; }
+  .sig { background: var(--panel); border: 1px solid var(--hair); border-radius: 8px;
+         padding: 13px 15px 15px; }
+  .sig h2 { font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+            color: var(--soft); margin: 0 0 3px; font-weight: 600; }
+  .sig .val { font-family: var(--font-mono); font-size: 22px; font-weight: 500;
+              font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .sig .note { font-size: 12px; color: var(--soft); margin-top: 2px; min-height: 18px; }
+  .track { position: relative; height: 8px; background: var(--panel-2);
+           border: 1px solid var(--hair); border-radius: 99px; margin-top: 9px;
+           overflow: hidden; }
+  .fill { position: absolute; inset: 0 auto 0 0; background: var(--blue);
+          border-radius: 99px; transition: width .12s linear, background .12s linear; }
+  .band { position: absolute; top: 0; bottom: 0; background: var(--faint); opacity: .55; }
+  .zero { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--soft); }
+
+  /* ---- diagram ----------------------------------------------------------- */
+  figure { margin: 0 0 16px; background: var(--panel); border: 1px solid var(--hair);
+           border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
+  .figscroll { overflow-x: auto; }
+  svg.sld { display: block; width: 100%; min-width: 860px; height: auto; }
+  figcaption { padding: 11px 16px 13px; border-top: 1px solid var(--hair);
+               color: var(--soft); font-size: 12.5px; background: var(--panel-2); }
+
+  .lbl   { font-family: var(--font-sans); font-size: 12px; font-weight: 600; fill: var(--ink); }
+  .val   { font-family: var(--font-mono); font-size: 11.5px; fill: var(--soft);
+           font-variant-numeric: tabular-nums; }
+  .eyebrow { font-family: var(--font-sans); font-size: 9.5px; font-weight: 600;
+             letter-spacing: .14em; fill: var(--soft); }
+  .annot { font-family: var(--font-mono); font-size: 10.5px; fill: var(--soft);
+           font-variant-numeric: tabular-nums; }
+  .busline { stroke: var(--bus); stroke-width: 7; stroke-linecap: round; }
+  .feeder  { stroke: var(--faint); stroke-width: 2; fill: none; }
+  .feeder.live  { stroke: var(--blue); stroke-width: 2.6; }
+  .feeder.charge{ stroke: var(--green); stroke-width: 2.6; }
+  .feeder.shedout { stroke: var(--faint); stroke-dasharray: 3 4; }
+  .sym  { fill: var(--panel); stroke: var(--soft); stroke-width: 1.6; }
+  .sym.on { stroke: var(--blue); }
+  .sym.off { stroke: var(--faint); }
+  .glyph { stroke: var(--soft); stroke-width: 1.6; fill: none; }
+  .glyph.on { stroke: var(--blue); }
+  .glyph.off { stroke: var(--faint); }
+  .dim { opacity: .42; }
+  .chip { font-family: var(--font-mono); font-size: 9px; font-weight: 600;
+          letter-spacing: .08em; fill: var(--red); }
+  .fault { stroke: var(--red); }
+
+  /* ---- controls ---------------------------------------------------------- */
+  .panelrow { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--hair); border-radius: 8px;
+          padding: 15px 16px 17px; }
+  .card h2 { font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--soft); margin: 0 0 12px; font-weight: 600; }
+  .transport { display: flex; align-items: center; gap: 12px; }
+  button { font: inherit; font-weight: 600; color: var(--ink); background: var(--panel-2);
+           border: 1px solid var(--hair); border-radius: 6px; padding: 7px 14px;
+           cursor: pointer; }
+  button:hover { border-color: var(--soft); }
+  button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  input[type=range] { flex: 1; accent-color: var(--blue); min-width: 120px; }
+  input[type=range]:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+  .switches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .sw { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px;
+        border: 1px solid var(--hair); border-radius: 99px; background: var(--panel-2);
+        cursor: pointer; font-size: 12.5px; user-select: none; }
+  .sw input { accent-color: var(--blue); margin: 0; }
+  .sw:has(input:checked) { border-color: var(--blue); color: var(--blue); }
+  .slider-row { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+  .slider-row label { font-size: 12.5px; color: var(--soft); white-space: nowrap; }
+  .slider-row output { font-family: var(--font-mono); font-size: 12.5px;
+                       font-variant-numeric: tabular-nums; min-width: 68px; text-align: right; }
+
+  /* ---- run tally --------------------------------------------------------- */
+  dl.tally { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; margin: 0; }
+  dl.tally dt { color: var(--soft); font-size: 12.5px; }
+  dl.tally dd { margin: 0; font-family: var(--font-mono); font-size: 12.5px;
+                font-variant-numeric: tabular-nums; text-align: right; }
+  dd.bad { color: var(--red); font-weight: 600; }
+  dd.good { color: var(--green); }
+  .foot { margin-top: 22px; color: var(--soft); font-size: 12.5px; max-width: 76ch; }
+  .foot code { font-family: var(--font-mono); font-size: 12px; color: var(--ink); }
+
+  @media (max-width: 780px) {
+    .signals, .panelrow { grid-template-columns: 1fr; }
+    .clock { text-align: left; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fill { transition: none; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Lunar Outpost One-Line</h1>
+      <p class="sub">
+        A 120&nbsp;VDC microgrid with the reactor a kilometre out. The
+        simulation runs in this page — scrub the clock or change the outpost
+        and the diagram answers.
+      </p>
+    </div>
+    <div class="clock">
+      <span class="t" id="clock">0000 h</span>
+      <span class="phase" id="phase"><span class="dot"></span>lunar day</span>
+    </div>
+  </header>
+
+  <section class="signals">
+    <div class="sig">
+      <h2>Energy signal — fleet reserve</h2>
+      <div class="val" id="socVal">1.0000</div>
+      <div class="note" id="socNote">what a conventional controller watches</div>
+      <div class="track">
+        <div class="band" id="deadband"></div>
+        <div class="fill" id="socFill" style="width:100%"></div>
+      </div>
+    </div>
+    <div class="sig">
+      <h2>Power signal — headroom</h2>
+      <div class="val" id="hrVal">+0.00 kW</div>
+      <div class="note" id="hrNote">what this project added</div>
+      <div class="track">
+        <div class="zero" id="hrZero" style="left:50%"></div>
+        <div class="fill" id="hrFill" style="width:50%"></div>
+      </div>
+    </div>
+  </section>
+
+  <figure>
+    <div class="figscroll">
+      <svg class="sld" id="sld" viewBox="0 0 1000 520" role="img"
+           aria-label="Single line diagram of the lunar outpost: a 120 volt DC user bus fed by a photovoltaic array and, over a one kilometre 1000 volt link, a fission reactor; with a battery and regenerative fuel cell on one side and four loads on the other."></svg>
+    </div>
+    <figcaption id="cap">
+      Drawn from <code>buildTopology()</code>, not by hand — the feeder lengths,
+      voltages and conductor areas shown are the ones the model used.
+    </figcaption>
+  </figure>
+
+  <div class="panelrow">
+    <div class="card">
+      <h2>Clock</h2>
+      <div class="transport">
+        <button id="play" class="primary" type="button">Play</button>
+        <input type="range" id="scrub" min="0" max="1439" value="0" step="1"
+               aria-label="hour of the run">
+        <span class="val" id="scrubVal" style="font-family:var(--font-mono);
+              font-size:13px; min-width:72px; text-align:right;">0 / 1439</span>
+      </div>
+      <div class="switches">
+        <label class="sw"><input type="checkbox" id="outage"> Reactor outage at t=500</label>
+        <label class="sw"><input type="checkbox" id="topology" checked> Conductors</label>
+        <label class="sw"><input type="checkbox" id="converters" checked> Converters</label>
+      </div>
+      <div class="slider-row">
+        <label for="pv">PV array</label>
+        <input type="range" id="pv" min="40" max="220" value="100" step="5">
+        <output id="pvVal">100 m²</output>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>This 60-day run</h2>
+      <dl class="tally">
+        <dt>Generated</dt><dd id="tGen">—</dd>
+        <dt>Served</dt><dd id="tServed">—</dd>
+        <dt>Unserved</dt><dd id="tUnserved">—</dd>
+        <dt>Curtailed</dt><dd id="tCurt">—</dd>
+        <dt>Conductor loss</dt><dd id="tFeed">—</dd>
+        <dt>Converter loss</dt><dd id="tConv">—</dd>
+        <dt>Controller actions</dt><dd id="tActions">—</dd>
+      </dl>
+    </div>
+  </div>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<script>
+/*__SIM_BUNDLE__*/
+
+/* ==========================================================================
+   The console. Everything above this line is the simulation core, byte for
+   byte the same modules that pass web/conformance.html — so what this page
+   draws is what the Python model computes.
+   ========================================================================== */
+
+const SHORT = {
+  "Environmental Control and Life Support System": "ECLSS",
+  "Regenerative Fuel Cell": "Fuel cell",
+  "Communications Array": "Comms",
+  "Science Payload": "Science",
+  "Battery Bank": "Battery",
+  "FSP Reactor": "Reactor",
+  "PV Array": "PV array",
+  "Thermal Control": "Thermal",
+};
+
+// x positions on the one-line. Sources feed down onto the bus; storage and
+// loads drop below it, grouped so the two roles read apart at a glance.
+const LAYOUT = {
+  "PV Array":                                     { x: 210, role: "source" },
+  "FSP Reactor":                                  { x: 800, role: "source", remote: true },
+  "Battery Bank":                                 { x: 128, role: "storage" },
+  "Regenerative Fuel Cell":                       { x: 266, role: "storage" },
+  "Environmental Control and Life Support System":{ x: 452, role: "load" },
+  "Thermal Control":                              { x: 574, role: "load" },
+  "Communications Array":                         { x: 696, role: "load" },
+  "Science Payload":                              { x: 818, role: "load" },
+};
+
+const BUS_Y = 250, DROP_Y = 336, SW_Y = 288, NAME_Y = 404, VAL_Y = 420;
+
+const $ = (id) => document.getElementById(id);
+const kW = (w) => (w / 1000).toFixed(2);
+
+let state = { history: [], summary: null, tick: 0, playing: false, raf: null };
+
+/* ---- build and run ------------------------------------------------------- */
+function rebuild() {
+  const outage = $("outage").checked ? 500.0 : null;
+  const topo = $("topology").checked;
+  const conv = $("converters").checked;
+  const area = Number($("pv").value);
+
+  const env = new LunarEnvironment();
+  const bus = buildOutpost(env, outage, topo, conv);
+  bus.sources[0].areaM2 = area;           // the one live design parameter
+
+  const engine = new SimulationEngine(bus);
+  engine.run();
+  state.history = engine.history;
+  state.summary = engine.summary();
+
+  const feederLoss = engine.history.reduce((s, r) => s + r.feeder_loss_w, 0) / 1000;
+  const convLoss = engine.history.reduce((s, r) => s + r.converter_loss_w, 0) / 1000;
+  const s = state.summary;
+  $("tGen").textContent = s.generated_kwh.toFixed(1) + " kWh";
+  $("tServed").textContent = s.served_kwh.toFixed(1) + " kWh";
+  $("tUnserved").textContent = s.unserved_kwh.toFixed(1) + " kWh";
+  $("tUnserved").className = s.unserved_kwh > 0 ? "bad" : "good";
+  $("tCurt").textContent = s.curtailed_kwh.toFixed(1) + " kWh";
+  $("tFeed").textContent = topo ? feederLoss.toFixed(1) + " kWh" : "not modelled";
+  $("tConv").textContent = conv ? convLoss.toFixed(1) + " kWh" : "not modelled";
+  $("tActions").textContent = String(s.actions);
+
+  $("foot").innerHTML = footnote(topo, conv, s);
+  drawStatic();
+  render();
+}
+
+function footnote(topo, conv, s) {
+  const bits = [];
+  if (s.unserved_kwh > 0) {
+    bits.push(`This outpost misses its load by <strong>${s.unserved_kwh.toFixed(1)} kWh</strong>.`);
+  } else {
+    bits.push("This outpost meets its load for the whole run.");
+  }
+  if (!topo && !conv) {
+    bits.push("With no conductors and no power electronics modelled, it is a pure power balance — which is how it looked before the electrical layer existed.");
+  } else if (topo && !conv) {
+    bits.push("Conductors only: the copper costs something, the silicon is still free.");
+  } else if (!topo && conv) {
+    bits.push("Converters only — and they cost more than the copper does.");
+  } else {
+    bits.push("Conductors and converters both. Together they lose about a fifth of everything generated.");
+  }
+  return bits.join(" ");
+}
+
+/* ---- the drawing --------------------------------------------------------- */
+function symbol(name, role, x) {
+  // Conventional one-line glyphs rather than boxes with words in them.
+  const g = [];
+  if (name === "PV Array") {
+    g.push(`<rect class="sym" id="sym-pv" x="${x - 30}" y="46" width="60" height="40" rx="2"/>`);
+    g.push(`<path class="glyph" id="gl-pv" d="M${x - 30} 86 L${x + 30} 46 M${x - 10} 86 L${x + 30} 60 M${x - 30} 72 L${x + 10} 46"/>`);
+  } else if (name === "FSP Reactor") {
+    g.push(`<circle class="sym" id="sym-fsp" cx="${x}" cy="66" r="25"/>`);
+    g.push(`<circle class="glyph" id="gl-fsp" cx="${x}" cy="66" r="6"/>`);
+    g.push(`<path class="glyph" d="M${x - 15} 55 A 18 18 0 0 1 ${x + 15} 55" opacity=".7"/>`);
+  } else if (role === "storage" && name.startsWith("Battery")) {
+    g.push(`<rect class="sym" x="${x - 26}" y="${DROP_Y}" width="52" height="46" rx="2"/>`);
+    for (let i = 0; i < 3; i++) {
+      const yy = DROP_Y + 12 + i * 11;
+      g.push(`<line class="glyph" x1="${x - 16}" y1="${yy}" x2="${x + 16}" y2="${yy}" stroke-width="${i % 2 ? 1.2 : 3}"/>`);
+    }
+  } else if (role === "storage") {
+    g.push(`<rect class="sym" x="${x - 26}" y="${DROP_Y}" width="52" height="46" rx="2"/>`);
+    g.push(`<path class="glyph" d="M${x - 14} ${DROP_Y + 32} q7 -22 14 -11 q7 11 14 -11"/>`);
+    g.push(`<line class="glyph" x1="${x - 14}" y1="${DROP_Y + 38}" x2="${x + 14}" y2="${DROP_Y + 38}" opacity=".6"/>`);
+  } else {
+    // Load: the standard downward triangle.
+    g.push(`<path class="sym" d="M${x - 24} ${DROP_Y + 4} L${x + 24} ${DROP_Y + 4} L${x} ${DROP_Y + 44} Z"/>`);
+  }
+  return g.join("");
+}
+
+function drawStatic() {
+  const env = new LunarEnvironment();
+  const [userBus, transBus] = buildTopology(true);
+  const feeders = new Map();
+  for (const b of [userBus, transBus]) for (const f of b.feeders) feeders.set(f.name, f);
+
+  const p = [];
+  p.push(`<defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5"
+            markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>`);
+
+  // Busbar
+  p.push(`<line class="busline" x1="62" y1="${BUS_Y}" x2="938" y2="${BUS_Y}"/>`);
+  p.push(`<text class="eyebrow" x="62" y="${BUS_Y - 14}">USER BUS · 120 VDC · ISPSIS</text>`);
+  p.push(`<text class="annot" x="938" y="${BUS_Y - 14}" text-anchor="end" id="busState">energised</text>`);
+
+  // Group eyebrows
+  p.push(`<text class="eyebrow" x="128" y="${VAL_Y + 40}">STORAGE</text>`);
+  p.push(`<text class="eyebrow" x="452" y="${VAL_Y + 40}">LOADS</text>`);
+  p.push(`<line x1="352" y1="${BUS_Y + 26}" x2="352" y2="${VAL_Y + 30}" stroke="var(--hair)" stroke-dasharray="2 5"/>`);
+
+  for (const [name, cfg] of Object.entries(LAYOUT)) {
+    const x = cfg.x, id = slug(name);
+    const f = feeders.get(name);
+
+    if (cfg.role === "source") {
+      if (cfg.remote) {
+        // The reactor is 1 km out for NUCLEAR reasons, behind a 1000 V link
+        // and a converter. That asymmetry is the whole architecture.
+        p.push(`<line class="feeder" id="fd-${id}" x1="${x}" y1="91" x2="${x}" y2="${BUS_Y}"/>`);
+        p.push(`<path class="glyph" d="M${x - 7} 132 l14 -7 M${x - 7} 142 l14 -7" opacity=".85"/>`);
+        p.push(`<text class="annot" x="${x + 16}" y="130">1000 VDC</text>`);
+        p.push(`<text class="annot" x="${x + 16}" y="144">1 km — FSP standoff</text>`);
+        p.push(`<rect class="sym" x="${x - 19}" y="176" width="38" height="30" rx="2"/>`);
+        p.push(`<line class="glyph" x1="${x - 12}" y1="201" x2="${x + 12}" y2="181"/>`);
+        p.push(`<text class="annot" x="${x + 26}" y="196">1000→120</text>`);
+      } else {
+        p.push(`<line class="feeder" id="fd-${id}" x1="${x}" y1="86" x2="${x}" y2="${BUS_Y}"/>`);
+      }
+      p.push(symbol(name, cfg.role, x));
+      // Label ABOVE the symbol and value BESIDE the conductor: centred on x,
+      // both would sit on top of the feeder line they annotate.
+      p.push(`<text class="lbl" x="${x}" y="${cfg.remote ? 30 : 36}" text-anchor="middle">${SHORT[name]}</text>`);
+      p.push(`<text class="val" x="${x + 14}" y="${cfg.remote ? 232 : 170}" id="v-${id}">—</text>`);
+    } else {
+      p.push(`<line class="feeder" id="fd-${id}" x1="${x}" y1="${BUS_Y}" x2="${x}" y2="${DROP_Y + 4}"/>`);
+      // SSPC — solid-state, because a DC fault has no current zero for a
+      // mechanical contact to exploit.
+      p.push(`<rect class="sym" id="sw-${id}" x="${x - 9}" y="${SW_Y - 9}" width="18" height="18" rx="2"/>`);
+      p.push(`<line class="glyph" id="swl-${id}" x1="${x - 5}" y1="${SW_Y + 5}" x2="${x + 5}" y2="${SW_Y - 5}"/>`);
+      p.push(symbol(name, cfg.role, x));
+      p.push(`<text class="lbl" x="${x}" y="${NAME_Y}" text-anchor="middle">${SHORT[name]}</text>`);
+      p.push(`<text class="val" x="${x}" y="${VAL_Y}" text-anchor="middle" id="v-${id}">—</text>`);
+      p.push(`<text class="chip" x="${x}" y="${VAL_Y + 15}" text-anchor="middle" id="chip-${id}"></text>`);
+      if (f) {
+        p.push(`<text class="annot" x="${x + 13}" y="${SW_Y + 22}" id="i-${id}">—</text>`);
+      }
+    }
+  }
+  $("sld").innerHTML = p.join("\n");
+}
+
+const slug = (s) => s.replace(/[^A-Za-z0-9]/g, "");
+
+/* ---- per-tick render ----------------------------------------------------- */
+function render() {
+  const r = state.history[state.tick];
+  if (!r) return;
+
+  $("clock").textContent = String(Math.round(r.t_hours)).padStart(4, "0") + " h";
+  const ph = $("phase");
+  ph.className = "phase" + (r.is_daylight ? "" : " night");
+  ph.innerHTML = `<span class="dot"></span>${r.is_daylight ? "lunar day" : "lunar night"}`;
+  $("scrub").value = state.tick;
+  $("scrubVal").textContent = `${state.tick} / 1439`;
+
+  // Two signals
+  const soc = r.aggregate_soc;
+  $("socVal").textContent = soc.toFixed(4);
+  $("socFill").style.width = (soc * 100).toFixed(1) + "%";
+  $("socFill").style.background = soc < SOC_SHED_THRESHOLD ? "var(--red)" : "var(--blue)";
+  $("deadband").style.left = (SOC_SHED_THRESHOLD * 100) + "%";
+  $("deadband").style.width = ((SOC_RESTORE_THRESHOLD - SOC_SHED_THRESHOLD) * 100) + "%";
+  $("socNote").textContent = soc < SOC_SHED_THRESHOLD ? "below the shed threshold"
+    : soc < SOC_RESTORE_THRESHOLD ? "inside the hysteresis dead band"
+    : "reserve healthy";
+
+  const hr = r.headroom_w, span = 60000;
+  const pct = Math.max(0, Math.min(100, ((hr + span) / (2 * span)) * 100));
+  $("hrVal").textContent = (hr >= 0 ? "+" : "") + kW(hr) + " kW";
+  $("hrFill").style.width = pct.toFixed(1) + "%";
+  $("hrFill").style.background = hr < 0 ? "var(--red)" : "var(--green)";
+  $("hrNote").textContent = hr < 0
+    ? "NEGATIVE — the bus cannot meet demand"
+    : `fleet can still deliver ${kW(r.storage_ceiling_w)} kW`;
+
+  const failing = r.shortfall_w > 0;
+  const busState = document.getElementById("busState");
+  if (busState) {
+    busState.textContent = failing ? `UNSERVED ${kW(r.shortfall_w)} kW` : "energised";
+    busState.setAttribute("fill", failing ? "var(--red)" : "var(--soft)");
+  }
+  document.querySelector(".busline").setAttribute("stroke",
+    failing ? "var(--red)" : "var(--bus)");
+
+  for (const [name, cfg] of Object.entries(LAYOUT)) {
+    const id = slug(name);
+    const fd = document.getElementById(`fd-${id}`);
+    const val = document.getElementById(`v-${id}`);
+    const cur = document.getElementById(`i-${id}`);
+    const chip = document.getElementById(`chip-${id}`);
+    const sw = document.getElementById(`sw-${id}`);
+    const swl = document.getElementById(`swl-${id}`);
+
+    let flowW = 0, text = "", shed = false, charging = false;
+
+    if (cfg.role === "source") {
+      flowW = r[`gen:${name}`] ?? 0;
+      text = kW(flowW) + " kW";
+      if (name === "FSP Reactor" && flowW === 0) text = "OUT";
+    } else if (cfg.role === "storage") {
+      const f = r[`flow:${name}`] ?? 0;
+      flowW = Math.abs(f);
+      charging = f > 0;
+      const socD = r[`soc:${name}`] ?? 0;
+      text = `${(socD * 100).toFixed(0)}%  ${f === 0 ? "idle" : (charging ? "+" : "−") + kW(flowW)}`;
+    } else {
+      shed = r[`shed:${name}`] === true;
+      flowW = r[`load:${name}`] ?? 0;
+      text = shed ? "shed" : kW(flowW) + " kW";
+      if (chip) chip.textContent = shed ? "OFF" : "";
+    }
+
+    if (val) val.textContent = text;
+    if (cur) {
+      const v = cfg.remote ? TRANSMISSION_VOLTAGE_V : USER_BUS_VOLTAGE_V;
+      cur.textContent = flowW > 0 ? (flowW / v).toFixed(0) + " A" : "";
+    }
+    if (fd) {
+      fd.className.baseVal = "feeder"
+        + (shed ? " shedout" : flowW > 0 ? (charging ? " charge" : " live") : "");
+    }
+    if (sw) sw.className.baseVal = "sym" + (shed ? " off" : flowW > 0 ? " on" : "");
+    if (swl) {
+      // An open SSPC is drawn as a lifted contact, which is what "shed" means.
+      swl.setAttribute("transform", shed ? `rotate(-32 ${cfg.x} ${SW_Y})` : "");
+      swl.className.baseVal = "glyph" + (shed ? " off" : flowW > 0 ? " on" : "");
+    }
+    const symOn = document.getElementById(name === "PV Array" ? "sym-pv"
+                : name === "FSP Reactor" ? "sym-fsp" : null);
+    if (symOn) symOn.className.baseVal = "sym" + (flowW > 0 ? " on" : " off");
+    const glOn = document.getElementById(name === "PV Array" ? "gl-pv"
+               : name === "FSP Reactor" ? "gl-fsp" : null);
+    if (glOn) glOn.className.baseVal = "glyph" + (flowW > 0 ? " on" : " off");
+  }
+}
+
+/* ---- transport ----------------------------------------------------------- */
+let lastFrame = 0;
+function tickLoop(ts) {
+  if (!state.playing) return;
+  if (ts - lastFrame > 40) {
+    lastFrame = ts;
+    state.tick = (state.tick + 1) % state.history.length;
+    render();
+  }
+  state.raf = requestAnimationFrame(tickLoop);
+}
+$("play").addEventListener("click", () => {
+  state.playing = !state.playing;
+  $("play").textContent = state.playing ? "Pause" : "Play";
+  if (state.playing) state.raf = requestAnimationFrame(tickLoop);
+  else cancelAnimationFrame(state.raf);
+});
+$("scrub").addEventListener("input", (e) => {
+  state.tick = Number(e.target.value);
+  render();
+});
+for (const id of ["outage", "topology", "converters"]) {
+  $(id).addEventListener("change", rebuild);
+}
+$("pv").addEventListener("input", (e) => {
+  $("pvVal").textContent = e.target.value + " m²";
+  rebuild();
+});
+
+$("pvVal").textContent = $("pv").value + " m²";
+rebuild();
+</script>

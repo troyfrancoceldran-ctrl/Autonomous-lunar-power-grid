@@ -84,9 +84,15 @@ def strip_module_syntax(source, path):
     return source
 
 
-def build_bundle():
+def build_bundle(modules=None):
+    """Concatenate the modules with their import/export syntax removed.
+
+    @param modules  Defaults to all of MODULES. build_sld.py passes a subset,
+        because the diagram page needs the model but not the golden-comparison
+        machinery.
+    """
     parts = ["'use strict';\n"]
-    for name in MODULES:
+    for name in (modules if modules is not None else MODULES):
         path = os.path.join(SRC, name)
         with open(path, encoding="utf-8") as handle:
             source = handle.read()

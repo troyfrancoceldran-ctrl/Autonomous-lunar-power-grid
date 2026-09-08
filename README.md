@@ -451,6 +451,25 @@ double. See `web/README.md` for why that residue exists and why it stays.
 .venv/bin/python web/tools/run_conformance.py
 ```
 
+### The one-line diagram
+
+`web/sld.html` is an operable single-line diagram: a 120 VDC busbar with the
+reactor a kilometre out behind a 1000 V link, drawn **from `buildTopology()`**
+rather than by hand, so the feeder lengths and voltages on screen are the ones
+the model used. Scrub the clock, trigger the reactor outage, switch the
+conductors and converters on and off, or resize the PV array — the simulation
+re-runs in the page and the diagram answers.
+
+It is self-contained: open it straight from disk, no server needed. The model
+inside it is injected by `web/tools/build_sld.py` from the same bundle the
+conformance runner executes, so the diagram cannot drift from the verified
+core.
+
+```bash
+.venv/bin/python web/tools/build_sld.py     # rebuild after changing the model
+open web/sld.html
+```
+
 ---
 
 ## Testing
