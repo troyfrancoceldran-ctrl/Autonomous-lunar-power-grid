@@ -5,13 +5,18 @@
 <style>
   /* ---- tokens: complete light palette on bare :root ---------------------- */
   :root {
-    --bg:        #eef1f4;
-    --panel:     #fafbfc;
-    --panel-2:   #f2f5f7;
-    --ink:       #12161c;
-    --soft:      #58626f;
-    --faint:     #c3ccd6;
-    --hair:      #dde3ea;
+    /* Regolith. Apollo surface photography reads NEUTRAL grey, not the tan
+       everyone paints it — so the ground is grey, and the panels sit on it
+       like lit surfaces. Panels stay at #f9f9f8 because the accent hues were
+       measured against a light ground: at #f4f4f3 orange falls to 2.98:1 and
+       green to 2.97:1, under the WCAG 1.4.11 floor. Measured, not guessed. */
+    --bg:        #e4e4e1;
+    --panel:     #f9f9f8;
+    --panel-2:   #efefec;
+    --ink:       #131314;
+    --soft:      #56585c;
+    --faint:     #c5c5c1;
+    --hair:      #dcdcd8;
 
     /* The repo's own measured palette. Chosen by CIEDE2000 separation under
       protanopia/deuteranopia/tritanopia plus WCAG 1.4.11 contrast, so the
@@ -21,37 +26,41 @@
     --green:  #2ba07e;
     --red:    #b13328;
 
-    --grid:      #d7dee6;
-    --bus:       #12161c;
-    --shadow:    0 1px 2px rgba(18,22,28,.06), 0 8px 24px rgba(18,22,28,.05);
+    --grid:      #d9d9d5;
+    --bus:       #131314;
+    /* No atmosphere means no scattering, so lunar shadows have hard edges.
+       A crisp offset rather than the usual soft blur. */
+    --shadow:    2px 3px 0 rgba(19,19,20,.07);
     --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
     --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   }
   :root:not([data-theme="light"]) { }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg:      #0e1218;
-      --panel:   #161b23;
-      --panel-2: #1b212a;
-      --ink:     #e7edf4;
-      --soft:    #94a1b2;
-      --faint:   #333d4a;
-      --hair:    #232b35;
+      /* The lunar night. Nothing scatters, so it goes far darker than a
+         normal dark theme — the sky is black even with the sun just set. */
+      --bg:      #08090b;
+      --panel:   #101216;
+      --panel-2: #15181d;
+      --ink:     #e9ebee;
+      --soft:    #8d939c;
+      --faint:   #2b2f36;
+      --hair:    #1d2026;
       --blue:    #207db6;
       --orange:  #fea12d;
       --green:   #3ec69d;
       --red:     #e22e31;
-      --grid:    #232b35;
-      --bus:     #cbd6e2;
-      --shadow:  0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
+      --grid:    #1d2026;
+      --bus:     #cdd2d9;
+      --shadow:  2px 3px 0 rgba(0,0,0,.5);
     }
   }
   :root[data-theme="dark"] {
-    --bg:      #0e1218;  --panel: #161b23; --panel-2: #1b212a;
-    --ink:     #e7edf4;  --soft:  #94a1b2; --faint:   #333d4a; --hair: #232b35;
+    --bg:      #08090b;  --panel: #101216; --panel-2: #15181d;
+    --ink:     #e9ebee;  --soft:  #8d939c; --faint:   #2b2f36; --hair: #1d2026;
     --blue:    #207db6;  --orange:#fea12d; --green:   #3ec69d; --red:  #e22e31;
-    --grid:    #232b35;  --bus:   #cbd6e2;
-    --shadow:  0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
+    --grid:    #1d2026;  --bus:   #cdd2d9;
+    --shadow:  2px 3px 0 rgba(0,0,0,.5);
   }
 
   * { box-sizing: border-box; }
@@ -68,7 +77,12 @@
   h1 { font-size: 25px; font-weight: 700; letter-spacing: -.02em; margin: 0;
       text-wrap: balance; }
   .sub { color: var(--soft); margin: 5px 0 0; max-width: 56ch; }
-  .clock { font-family: var(--font-mono); text-align: right; }
+  .clock { font-family: var(--font-mono); text-align: right;
+           display: flex; align-items: center; gap: 15px; }
+  .disc { width: 46px; height: 46px; flex: none; }
+  .disc .limb { fill: none; stroke: var(--faint); stroke-width: 1; }
+  .disc .lit  { fill: var(--ink); }
+  .disc .dark { fill: var(--panel-2); }
   .clock .t { font-size: 27px; font-weight: 500; letter-spacing: -.02em;
               font-variant-numeric: tabular-nums; display: block; }
   .phase { font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
@@ -227,8 +241,18 @@
       </p>
     </div>
     <div class="clock">
-      <span class="t" id="clock">0000 h</span>
-      <span class="phase" id="phase"><span class="dot"></span>lunar day</span>
+      <svg class="disc" id="disc" viewBox="0 0 46 46" role="img"
+           aria-label="Lunar phase at the current hour">
+        <title>Phase as seen from Earth. A near-side equatorial site has local
+noon at full moon, so this disc reads the outpost's own clock.</title>
+        <circle class="dark" cx="23" cy="23" r="19"/>
+        <path class="lit" id="discLit" d=""/>
+        <circle class="limb" cx="23" cy="23" r="19"/>
+      </svg>
+      <div>
+        <span class="t" id="clock">0000 h</span>
+        <span class="phase" id="phase"><span class="dot"></span>lunar day</span>
+      </div>
     </div>
   </header>
 
@@ -397,6 +421,12 @@
           A DC fault current never crosses zero, so a mechanical contact has
           nothing to help it extinguish the arc. When a load is shed its
           controller lifts open and the conductor below goes dashed.</li>
+      <li>The disc beside the clock is the <strong>lunar phase as seen from
+          Earth</strong>. It is not decoration: the synodic period driving this
+          simulation is the same one that drives the phase, and a near-side
+          equatorial site has local noon at full moon — so the disc reads the
+          outpost's own clock. Full at noon, new at midnight, half at each
+          terminator crossing.</li>
       <li>Conductors turn <strong>blue</strong> carrying power to a load,
           <strong>green</strong> charging storage, and the busbar turns
           <strong>red</strong> on any hour with unserved power.</li>
@@ -1792,11 +1822,42 @@ function drawStatic() {
 
 const slug = (s) => s.replace(/[^A-Za-z0-9]/g, "");
 
+
+/* ---- lunar phase disc ----------------------------------------------------
+   Correct rather than decorative. The synodic period that drives this
+   simulation IS the period that drives the Moon's phase as seen from Earth,
+   and a near-side equatorial site has local noon at full moon — so the disc
+   reads the outpost's own clock. Full at local noon, new at local midnight,
+   half at each terminator crossing. */
+const illumAt = (phase) =>
+  (1 + Math.cos((2 * Math.PI * (phase - LUNAR_DAY_HOURS / 2)) / LUNAR_CYCLE_HOURS)) / 2;
+
+function moonPath(cx, cy, r, f) {
+  // The terminator is an ellipse whose semi-minor axis shrinks to zero at
+  // half phase and reaches r at full or new; its sweep flips at half.
+  const semi = r * (1 - 2 * f);
+  const sweep = semi > 0 ? 1 : 0;
+  return `M ${cx} ${cy - r} A ${r} ${r} 0 0 1 ${cx} ${cy + r} `
+       + `A ${Math.abs(semi).toFixed(2)} ${r} 0 0 ${sweep} ${cx} ${cy - r} Z`;
+}
+
+function drawPhase(tHours) {
+  const phase = mod(tHours, LUNAR_CYCLE_HOURS);
+  const f = illumAt(phase);
+  const waxing = illumAt(phase + 1) > f;
+  const lit = document.getElementById("discLit");
+  if (!lit) return;
+  lit.setAttribute("d", moonPath(23, 23, 19, f));
+  // The lit limb is drawn on the right; waning mirrors it to the left.
+  lit.setAttribute("transform", waxing ? "" : "translate(46,0) scale(-1,1)");
+}
+
 /* ---- per-tick render ----------------------------------------------------- */
 function render() {
   const r = state.history[state.tick];
   if (!r) return;
   moveCursors();
+  drawPhase(r.t_hours);
 
   $("clock").textContent = String(Math.round(r.t_hours)).padStart(4, "0") + " h";
   const ph = $("phase");

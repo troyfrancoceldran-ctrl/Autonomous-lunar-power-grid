@@ -316,7 +316,7 @@ class PowerBus:
         return before_converter_w + feeder_loss_w, converter_loss_w, feeder_loss_w
 
     def _feeder_loss_w(self, name: str, power_w: float,
-                       temperature_k: float) -> float:
+                    temperature_k: float) -> float:
         """Loss in the feeder serving `name`; 0.0 with no topology wired.
 
         An asset with no feeder is treated as sitting on the bus itself,
