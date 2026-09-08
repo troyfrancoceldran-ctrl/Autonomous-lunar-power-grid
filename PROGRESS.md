@@ -49,82 +49,49 @@ Authors are Troy Celdran with JARVIS (Claude Opus 5) as co-author.
       only THREE slots: no figure identified more than three series by colour.
       218 tests.
 
-## Next cycle — week of 2026-09-08
-Two upgrades, taken together because the second is more useful once the first
-exists. Both are in the README roadmap.
-- [ ] **Electrical topology** — split into four work orders, spec in
-      `topology.py`'s module docstring, constants in `config.py`.
-      - [x] **T01** `topology.py` — SPLIT 2026-09-07. Plumbing done by Claude
-            (dataclasses, conductor_mass_kg, DCBus aggregation,
-            build_topology, 26 tests). Electrical core is the USER's:
-            resistance_ohm, current_a, voltage_drop_v, loss_w,
-            size_for_loss_budget. Tests for those SKIP until each method
-            lands, so the suite stays green — `pytest -rs` prints the
-            remaining work as a skip list. 12 pass, 14 skipped.
-      - [x] **T02** `power_bus.py` — DONE 2026-09-07 (Claude). Feeders wired
-            into the tick; identity extended to `generation + discharged ==
-            served + charged + curtailed + losses` and still closes, worst
-            residual 7.276e-12 W. Opt-in via `--topology`, so every result
-            published before T02 stays reproducible.
-            RESULT: the nominal run goes from 0.0 to 10.3 kWh unserved with
-            NO outage — conductor loss alone (8.56 % of generation) is enough
-            to make the outpost miss its load. Daylight 10.36 % vs night
-            2.69 % as a fraction of generation. Eight feeders each sized to a
-            5 % budget compose to 8.56 %, not 5 %.
-            Two defects, both found only by running it: D-03 the reactor
-            feeder was bound by a name build_outpost never used, so a 1 km
-            link silently contributed 0.0 W while totals looked plausible;
-            D-04 surplus dispatch offered devices power the bus could not
-            deliver, and the clamp hid a 1.625e+03 W residual.
-      - [x] **T03** `converters.py` — DONE 2026-09-07 (Claude). Opt-in behind
-            `--converters`, separately from `--topology`, so the two losses
-            can be attributed rather than lumped.
-            RESULT: the silicon costs MORE than the copper. Converters alone
-            lose 9.79 % of generation against conductors' 8.56 %, and cost 14x
-            the unserved energy (142.1 vs 10.3 kWh). Together 18.10 %, and
-            155.5 kWh unserved on a run with no outage.
-            Also: adding converters LOWERS conductor loss (2587.9 -> 2518.1
-            kWh) because a converter throttles what its feeder carries.
-            Nothing was double-counted: PV_EFFICIENCY is a cell figure, the
-            battery's 0.95 is electrochemical, the RFC's 0.55 is stack
-            chemistry — none includes power electronics.
-      - [x] **T04** `protection.py` — DONE 2026-09-08. Spec, plumbing, tests
-            and maths PDF by Claude; the ENGINEERING BY THE USER (their
-            choice, taken in preference to T03). 21 tests, none skipped.
-            RESULTS: every feeder's fault is exactly 88x its rating, which
-            is algebra rather than coincidence — V, A and L cancel, leaving
-            (1/f)(rho_ref/rho_night). And only 2 of 8 feeders can be
-            coordinated: the 100 us margin is twice the 50 us floor, so any
-            fault clearing upstream in under 150 us has no room for one.
-            The user's one defect was `t = self.trip_time_s` returning the
-            BOUND METHOD — the fourth appearance of that family here.
-            Grounded numbers already in the module docstring: the battery
-            feeder's prospective fault is 36.6 kA, EIGHTY-EIGHT times its
-            417 A rating. The reactor has the LOWEST fault current at the
-            HIGHEST voltage — a kilometre of thin aluminium is its own
-            protection. And the T02 temperature finding INVERTS: losses are
-            worst hot, fault current worst COLD, a 6.3x swing either way.
-      Architecture settled from NASA sources: a 120 VDC user bus (ISPSIS,
-      100 m limit) carrying every asset EXCEPT the reactor, which must sit
-      >= 1 km away for NUCLEAR reasons and therefore needs a boost/transmit/
-      buck chain. The ceiling on transmission voltage is space-qualified
-      SEMICONDUCTORS (160 V devices, 1.5 kV rad-hard cap), not insulation.
-- [x] **Client-side model** — DONE 2026-09-08 (Claude). `web/` is the JS port:
-      906 lines of core, every import stdlib. Held to the Python model by a
-      conformance check — 3 scenarios x 1440 ticks x 46 fields = 198,720
-      comparisons, all PASS. At full precision the `bare` scenario is
-      bit-identical and the other two agree to 1.85e-16, under one ULP; the
-      residue is math.pow vs `i * i`, and `i * i` is the more accurate, so it
-      stays. `config.js` is GENERATED from `config.py` so constants cannot
-      drift. No Node needed: macOS JavaScriptCore via `osascript` runs the
-      headless check.
-- [x] **Operable single-line diagram** — DONE 2026-09-08 (Claude).
-      `web/sld.html`, generated from `buildTopology()` rather than hand-drawn,
-      with the verified model injected by `build_sld.py`. Scrub the clock,
-      trigger the outage, toggle conductors/converters, resize the PV array —
-      it re-runs and redraws. Self-contained; opens from disk.
-Further out, and dependent on both: an operable SLD, then a hardware render.
-The successor is expected to be a NEW repo with its own name.
+## Week of 2026-09-08 — DONE
+All four topology work orders, the client-side model and the operable SLD.
+The repo is also a live website now: GitHub Pages serves the landing page, the
+diagram and the conformance check at
+https://troyfrancoceldran-ctrl.github.io/Autonomous-lunar-power-grid/
+The conformance page only became runnable once it was served over HTTPS —
+file:// blocks the fetch it needs — so "run it yourself" is now literal.
+
+## Next cycle — PROJECT B, and the merge into this one
+From the user's career roadmap: **Project B — Real-Time HIL Battery Management
+State Estimator**, an Extended Kalman Filter written from scratch in Modern
+C++, flashed onto an ESP32, tracking Li-ion state of charge under noisy
+high-stress current profiles. The user intends to merge it into this project
+(Project A) rather than keep them separate.
+
+WHY IT IS NOT A BOLT-ON. `BatteryBank.state_of_charge` is `energy_wh /
+capacity_wh` — exact, noiseless, known instantly. No real system can measure
+SoC at all; that is precisely why an EKF exists. So the controller currently
+acts on ground truth it could never have. Swapping that input for an ESTIMATE
+turns the merge into a measurable question:
+
+    How much does outpost reliability degrade when the controller acts on an
+    estimate rather than on truth?
+
+The project already measures unserved kWh, LOLP and failure mode, so the answer
+is a table. It attacks the headline finding directly: if the estimator lags
+during a fast discharge, the power-limited hours should get WORSE, and by a
+number we can state.
+
+- [ ] **B01** A battery terminal model the EKF can observe — OCV curve plus
+      internal resistance, so there is a voltage to measure rather than a
+      state to read. (USER — physics)
+- [ ] **B02** The EKF itself, C++ on the ESP32. (USER)
+- [ ] **B03** The HIL bridge: controller on the ESP32, physics on the host,
+      serial between them. This is what "hardware" should mean here — the
+      controller was written numpy-free at Step 7 precisely so it could port
+      to an MCU. (Claude — plumbing)
+- [ ] **B04** Measure truth-vs-estimate across the scenarios. (together)
+
+NOTE ON THE "HARDWARE RENDER". It was a placeholder and the user was never
+sure of it either (said so 2026-09-08). Hardware-in-the-loop supersedes it: a
+render produces a picture, HIL produces a measurement, and this project has
+consistently preferred measurements.
 
 ## Agreed sequence from here (2026-09-04)
 1. **User** writes Step 11 against `tests/INVARIANTS.md`.
