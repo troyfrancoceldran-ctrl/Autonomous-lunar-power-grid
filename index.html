@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autonomous Lunar Power Grid</title>
+<meta name="description" content="An hour-by-hour simulation of an autonomous lunar outpost's power system, and the finding that every hour of unserved power happened at 62% fleet reserve.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #e4e4e1; --panel: #f9f9f8; --panel-2: #efefec;
+    --ink: #131314; --soft: #56585c; --faint: #c5c5c1; --hair: #dcdcd8;
+    --blue: #1963a4; --orange: #d67510; --green: #2ba07e; --red: #b13328;
+    --shadow: 2px 3px 0 rgba(19,19,20,.07);
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #08090b; --panel: #101216; --panel-2: #15181d;
+      --ink: #e9ebee; --soft: #8d939c; --faint: #2b2f36; --hair: #1d2026;
+      --blue: #207db6; --orange: #fea12d; --green: #3ec69d; --red: #e22e31;
+      --shadow: 2px 3px 0 rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #08090b; --panel: #101216; --panel-2: #15181d;
+    --ink: #e9ebee; --soft: #8d939c; --faint: #2b2f36; --hair: #1d2026;
+    --blue: #207db6; --orange: #fea12d; --green: #3ec69d; --red: #e22e31;
+    --shadow: 2px 3px 0 rgba(0,0,0,.5);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font-family: var(--sans); font-size: 15px; line-height: 1.6;
+         -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 64px 22px 72px; }
+  h1 { font-size: 32px; font-weight: 700; letter-spacing: -.025em;
+       margin: 0 0 8px; text-wrap: balance; }
+  .lede { color: var(--soft); font-size: 16px; margin: 0 0 30px; max-width: 40rem; }
+  .finding { background: var(--panel); border: 1px solid var(--hair);
+             border-left: 3px solid var(--red); border-radius: 6px;
+             padding: 18px 22px; margin: 0 0 34px; box-shadow: var(--shadow); }
+  .finding p { margin: 0; }
+  .finding strong { font-family: var(--mono); font-weight: 500; }
+  h2 { font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+       color: var(--soft); margin: 36px 0 14px; font-weight: 600; }
+  .links { display: grid; gap: 12px; }
+  a.tile { display: block; background: var(--panel); border: 1px solid var(--hair);
+           border-radius: 8px; padding: 17px 20px; text-decoration: none;
+           color: inherit; box-shadow: var(--shadow); }
+  a.tile:hover { border-color: var(--blue); }
+  a.tile:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  a.tile .t { font-weight: 600; color: var(--blue); display: block; }
+  a.tile .d { color: var(--soft); font-size: 14px; margin-top: 2px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 12px 7px 0; border-bottom: 1px solid var(--hair); }
+  th { color: var(--soft); font-weight: 600; font-size: 11px;
+       letter-spacing: .08em; text-transform: uppercase; }
+  td.n { font-family: var(--mono); text-align: right;
+         font-variant-numeric: tabular-nums; }
+  td.bad { color: var(--red); font-weight: 600; }
+  footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--hair);
+           color: var(--soft); font-size: 13.5px; }
+  footer a { color: var(--blue); }
+  code { font-family: var(--mono); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Autonomous Lunar Power Grid</h1>
+  <p class="lede">
+    An hour-by-hour simulation of the power system for an autonomous lunar
+    outpost — photovoltaic array, fission reactor, battery, regenerative fuel
+    cell, and a controller that decides what to switch off when the reserves
+    run low. Sixty simulated days, just over two lunar cycles.
+  </p>
+
+  <div class="finding">
+    <p>
+      Every hour of unserved power happened at a fleet reserve of
+      <strong>0.62</strong> — comfortably above the shed threshold, and rising.
+      Energy-limited and power-limited failures are different events, and a
+      single state-of-charge signal is blind to one of them.
+    </p>
+  </div>
+
+  <h2>Open</h2>
+  <div class="links">
+    <a class="tile" href="web/sld.html">
+      <span class="t">The one-line diagram →</span>
+      <span class="d">An operable single-line diagram with the whole simulation
+        running in the page. Scrub the clock, trigger a reactor outage, switch
+        the conductors and converters on and off, resize the array.</span>
+    </a>
+    <a class="tile" href="web/conformance.html">
+      <span class="t">Run the conformance check →</span>
+      <span class="d">The browser model against the Python model, tick for tick
+        — 198,720 comparisons across three scenarios. Don't take the port on
+        trust; execute it.</span>
+    </a>
+    <a class="tile" href="https://github.com/troyfrancoceldran-ctrl/Autonomous-lunar-power-grid">
+      <span class="t">Source, tests and write-up →</span>
+      <span class="d">300 Python tests, a mutation check, a compliance audit
+        against NASA and IEEE sources, and the full account of what the model
+        found and what it deliberately does not model.</span>
+    </a>
+  </div>
+
+  <h2>What modelling the wire costs</h2>
+  <table>
+    <thead><tr><th>60-day run</th><th style="text-align:right">Unserved</th><th style="text-align:right">Loss</th></tr></thead>
+    <tbody>
+      <tr><td>Power balance only</td><td class="n">0.0 kWh</td><td class="n">—</td></tr>
+      <tr><td>Conductors</td><td class="n">10.3 kWh</td><td class="n">8.56 %</td></tr>
+      <tr><td>Converters</td><td class="n">142.1 kWh</td><td class="n">9.79 %</td></tr>
+      <tr><td>Both</td><td class="n bad">155.5 kWh</td><td class="n bad">18.10 %</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    Built by Troy Celdran. Constants checked against NASA Fission Surface Power
+    and Glenn RFC data, IEEE 2030.7 and IEC 60364-4-43; the synodic period is
+    <code>708.7 h</code>, not the 336 h shorthand.
+    <a href="https://github.com/troyfrancoceldran-ctrl/Autonomous-lunar-power-grid">
+      github.com/troyfrancoceldran-ctrl/Autonomous-lunar-power-grid</a>
+  </footer>
+</div>
+</body>
+</html>
