@@ -67,14 +67,23 @@ Two things in that table are worth staring at.
     against the COLD case; losses against the HOT one.
 
 --------------------------------------------------------------------------------
-WORK ORDER — T04 IS YOURS
+HOW T04 WAS BUILT
 --------------------------------------------------------------------------------
-Same arrangement as T01: the engineering is yours, the plumbing and tests are
-mine and already work. Four methods, marked >>> YOURS. Ask for syntax or
-algorithm help whenever you want it.
+Split as T01 was: the engineering by Troy Celdran, the spec, plumbing and tests
+by JARVIS. Completed 2026-09-08, 21 tests.
 
-`tests/test_protection.py` skips any test whose method still raises, so the
-suite stays green and `pytest -rs` prints what is left.
+The four methods below carry the same numbered structure as the spec they were
+written against; that spec is now the documentation in THE MATHEMATICS, above.
+
+One defect is worth recording because it is the FOURTH of its kind here. The
+instantaneous branch was written `t = self.trip_time_s`, which returns the
+BOUND METHOD rather than the field `self.min_trip_time_s`. Python raises
+nothing — methods are first-class objects — so the wrong thing is returned and
+the failure surfaces elsewhere, in this case as `unsupported operand type(s)
+for +: 'method' and 'float'` two functions away. The same family has appeared
+as a method shadowed by a float in environment.py, as RFC properties written
+without @property, and as `self.loss_w = ...` overwriting the method it was
+inside. The tell is always a name one word away from the value wanted.
 
 1.  prospective_fault_current_a(feeder, temperature_k)          [module function]
 
@@ -140,6 +149,36 @@ suite stays green and `pytest -rs` prints what is left.
     and let the test say so.
 
 --------------------------------------------------------------------------------
+WHAT IT MEASURED
+--------------------------------------------------------------------------------
+Run over the assembled outpost, two results fall out that were not put in.
+
+1. EVERY FEEDER'S FAULT IS 88x ITS RATING. Exactly, all eight of them, from
+   the 10 A reactor link to the 417 A battery. That is algebra, not
+   coincidence: both figures derive from the same conductor, so
+
+       I_f     V A / (rho_night L_c)        1     rho_ref
+       ---  =  ---------------------  =  ( --- )( ------- )  =  20 x 4.398
+       I_r     A f V / (rho_ref L_c)         f    rho_night
+
+   and V, A and L all cancel. The fault-to-rating ratio is a property of the
+   SIZING RULE and the temperature swing, not of any particular feeder — any
+   outpost sized to a 5 % loss budget gets 88x whatever its geometry.
+
+2. ONLY 2 OF 8 FEEDERS CAN BE COORDINATED. Against a 1000 A bus device, six
+   fail selectivity at their own fault current. The reason is the margin
+   itself: PROTECTION_COORDINATION_MARGIN_S is 100 us against a 50 us floor,
+   so any fault that clears the upstream device in under 150 us leaves no
+   room for a margin at all. Only the comms array (1.8 kA) and the reactor
+   link (0.9 kA) draw little enough current to be slow enough.
+
+   This is the sting from THE MATHEMATICS, section 4, confirmed against real
+   numbers. It is a limitation of the DESIGN — identical I^2t ratings and a
+   margin twice the floor — and not of the implementation. Staggering the
+   I^2t ratings is the fix, and it is deliberately not applied here, because
+   the model is more useful stating the problem than quietly dodging it.
+
+--------------------------------------------------------------------------------
 WHAT THIS DELIBERATELY DOES NOT MODEL
 --------------------------------------------------------------------------------
   * Source impedance. Battery internal resistance and converter current limits
@@ -199,7 +238,7 @@ fault_survey(buses, temperature_k=CABLE_TEMP_NIGHT_K) -> dict[str, float]
 """
 
 import dataclasses
-import math
+import math as mt
 
 from config import (CABLE_TEMP_NIGHT_K, CONDUCTOR_RESISTIVITY_OHM_M,
                     MAX_FEEDER_LOSS_FRACTION,
@@ -223,42 +262,60 @@ class ProtectionDevice:
         """Current above which the device stops integrating and just fires."""
         return self.rated_current_a * self.inst_multiple
 
-    # =========================================================================
-    # START EDITING HERE — T04, method 2                            >>> YOURS
-    # =========================================================================
+    # --- the trip curve (Troy Celdran) --------------------------------------
     def trip_time_s(self, current_a: float) -> float:
         """Seconds before the device opens at this current.
 
-        math.inf below the rating; min_trip_time_s at or above the
-        instantaneous threshold; i2t_rating / current^2 in between.
-        Mind the branch order — see TRAP in the module docstring.
+        Three regions, and the ORDER matters: the instantaneous test must come
+        before the I^2t fall-through, or a dead short is quoted a trip time
+        faster than silicon can switch.
         """
+        if current_a <= self.rated_current_a:
+            t = mt.inf
+            return t
+        elif current_a >= self.instantaneous_threshold_a:
+            t = self.min_trip_time_s
+            return t
+        else:
+            return self.i2t_rating_a2s / mt.pow(current_a, 2)
         
-        raise NotImplementedError("T04 method 2")
-
-    # ------------------------------------------------------------- 3 >>> YOURS
     def let_through_energy_a2s(self, current_a: float) -> float:
         """I^2 t actually let through before the device opens."""
-        raise NotImplementedError("T04 method 3")
-
-
-# ------------------------------------------------------------- 1 >>> YOURS ---
+        if current_a <= self.rated_current_a:
+            t = mt.inf
+            return t
+        if self.rated_current_a < current_a < self.instantaneous_threshold_a:
+            t = self.i2t_rating_a2s
+            return t
+        if current_a >= self.instantaneous_threshold_a:
+            return mt.pow(current_a, 2) * SSPC_MIN_TRIP_TIME_S
+        
+# --- fault current and coordination (Troy Celdran) ---------------------------
 def prospective_fault_current_a(feeder, temperature_k: float) -> float:
     """Bolted-fault current at the far end of a feeder, ideal source.
 
-    I = feeder.nominal_voltage_v / feeder.resistance_ohm(temperature_k)
+    An UPPER bound: real sources have internal impedance and converters have
+    current limits, both of which reduce it.
     """
-    raise NotImplementedError("T04 method 1")
+    I_fault = feeder.nominal_voltage_v / feeder.resistance_ohm(temperature_k) #assuming Ideal 
+    return I_fault
 
 
-# ------------------------------------------------------------- 4 >>> YOURS ---
 def is_selective(upstream, downstream, current_a: float) -> bool:
-    """True when the downstream device clears first by the margin.
+    """True when the downstream device clears first by the coordination margin.
 
-    downstream.trip_time_s(I) + PROTECTION_COORDINATION_MARGIN_S
-        <= upstream.trip_time_s(I)
+    Written as an addition rather than `t_up - t_down >= margin`, which is
+    algebraically identical but not numerically: inf - inf is nan, and every
+    comparison against nan is False.
     """
-    raise NotImplementedError("T04 method 4")
+    t_down = downstream.trip_time_s(current_a)
+    t_up = upstream.trip_time_s(current_a)
+    
+    if t_down + PROTECTION_COORDINATION_MARGIN_S <= t_up:
+        return True
+    else:
+        return False
+
 
 
 # =============================================================================

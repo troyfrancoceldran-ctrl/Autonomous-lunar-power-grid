@@ -88,11 +88,16 @@ exists. Both are in the README roadmap.
             Nothing was double-counted: PV_EFFICIENCY is a cell figure, the
             battery's 0.95 is electrochemical, the RFC's 0.55 is stack
             chemistry — none includes power electronics.
-      - [~] **T04** `protection.py` — spec + plumbing + tests by Claude
-            2026-09-07; the ENGINEERING IS THE USER'S (their choice, taken in
-            preference to T03). 4 plumbing tests pass, 17 skip across four
-            methods: prospective_fault_current_a, trip_time_s,
-            let_through_energy_a2s, is_selective.
+      - [x] **T04** `protection.py` — DONE 2026-09-08. Spec, plumbing, tests
+            and maths PDF by Claude; the ENGINEERING BY THE USER (their
+            choice, taken in preference to T03). 21 tests, none skipped.
+            RESULTS: every feeder's fault is exactly 88x its rating, which
+            is algebra rather than coincidence — V, A and L cancel, leaving
+            (1/f)(rho_ref/rho_night). And only 2 of 8 feeders can be
+            coordinated: the 100 us margin is twice the 50 us floor, so any
+            fault clearing upstream in under 150 us has no room for one.
+            The user's one defect was `t = self.trip_time_s` returning the
+            BOUND METHOD — the fourth appearance of that family here.
             Grounded numbers already in the module docstring: the battery
             feeder's prospective fault is 36.6 kA, EIGHTY-EIGHT times its
             417 A rating. The reactor has the LOWEST fault current at the

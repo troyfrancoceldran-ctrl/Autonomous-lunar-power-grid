@@ -93,7 +93,7 @@ Everything together:
 ### Tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -q        # 283 tests, ~3.9 s
+.venv/bin/python -m pytest tests/ -q        # 300 tests, ~2.5 s
 .venv/bin/python tests/mutation_check.py    # reintroduces 9 real bugs, ~2 min
 ```
 
@@ -393,7 +393,7 @@ before this is silently revised.
 
 ## Testing
 
-283 tests in about four seconds. They are organised by
+300 tests in about two and a half seconds. They are organised by
 **failure mode**, not by
 module, because every real bug this project shipped survived a passing test:
 
@@ -478,10 +478,10 @@ metrics.py                reliability and failure-mode KPIs
 visualization.py          four figures, light and dark themes
 topology.py               buses, feeders, conductor sizing, losses
 converters.py             power electronics, distinct from the device
-protection.py             SSPC trip curves, fault current  [T04, in progress]
+protection.py             SSPC trip curves, fault current, coordination
                           maths: docs/protection_formulas.pdf
 main.py                   entry point and the outpost parts list
-tests/                    283 tests + INVARIANTS.md + mutation_check.py
+tests/                    300 tests + INVARIANTS.md + mutation_check.py
                           + palette_check.py (figure legibility, measured)
 docs/                     compliance inspection, figures,
                           protection_formulas.pdf (T04 mathematics)
