@@ -263,7 +263,7 @@ class PowerBus:
     """One tick of outpost operation, and the accounting that proves it balanced."""
 
     def __init__(self, sources, storage, loads, controller, environment,
-                 buses=None, converters=None):
+                buses=None, converters=None):
         """Hold references to every asset; order of `storage` is merit order.
 
         @param buses  Optional iterable of topology.DCBus. Omit it and every
@@ -281,7 +281,7 @@ class PowerBus:
         self.converters = dict(converters) if converters else {}
 
     def _supply_to_bus(self, name: str, asset_power_w: float,
-                       temperature_k: float):
+                    temperature_k: float):
         """Asset supplies asset_power_w; what reaches the bus, and the losses.
 
         @return (bus_power_w, converter_loss_w, feeder_loss_w)
@@ -349,7 +349,7 @@ class PowerBus:
         return generation_w + self.storage_power_ceiling_w(dt_hours) - demand_w
 
     def _dispatch_surplus(self, surplus_w: float, dt_hours: float,
-                          temperature_k: float):
+                        temperature_k: float):
         """Charge in merit order.
 
         @return (absorbed_w, curtailed_w, flows, converter_loss_w, feeder_loss_w)
@@ -388,7 +388,7 @@ class PowerBus:
                 converter_loss_w, feeder_loss_w)
 
     def _dispatch_deficit(self, deficit_w: float, dt_hours: float,
-                          temperature_k: float):
+                        temperature_k: float):
         """Discharge in merit order.
 
         @return (delivered_w, shortfall_w, flows, converter_loss_w, feeder_loss_w)

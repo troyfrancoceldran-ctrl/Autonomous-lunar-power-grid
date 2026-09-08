@@ -9,6 +9,13 @@ It runs 60 days — just over two full lunar cycles — and answers one question
 that a single number cannot: **when this outpost fails, does it fail because it
 ran out of energy, or because it ran out of power?**
 
+### → [Open the live site](https://troyfrancoceldran-ctrl.github.io/Autonomous-lunar-power-grid/)
+
+| | |
+|---|---|
+| **[One-line diagram](https://troyfrancoceldran-ctrl.github.io/Autonomous-lunar-power-grid/web/sld.html)** | The whole simulation running in the page. Scrub the clock, trigger a reactor outage, switch the conductors and converters on and off, resize the array — the diagram answers. |
+| **[Conformance check](https://troyfrancoceldran-ctrl.github.io/Autonomous-lunar-power-grid/web/conformance.html)** | The browser model against the Python model, 198,720 comparisons. Don't take the port on trust — run it. |
+
 ---
 
 ## The result
