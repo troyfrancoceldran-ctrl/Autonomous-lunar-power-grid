@@ -4,6 +4,20 @@
 
 namespace lunar {
 
+// ============================ START EDITING HERE ============================
+// Two functions. The spec, the six equations and the four traps are all in
+// ekf.hpp; docs/ekf_formulas.pdf is the same material typeset, with charts.
+//
+// Order of work: docv_dsoc first — test_jacobian_matches_numerical checks it
+// against a finite difference in isolation, so you can have it PROVEN right
+// before update() is allowed to depend on it.
+//
+//   cmake --build estimator/build && ./estimator/build/test_ekf
+//
+// 9 tests are SKIPPING. They are the specification, and they go green in the
+// order you write.
+// ============================================================================
+
 double docv_dsoc(double soc) {
     (void)soc;
     // B02 function 1. Analytic derivative of params::ocv_v.
