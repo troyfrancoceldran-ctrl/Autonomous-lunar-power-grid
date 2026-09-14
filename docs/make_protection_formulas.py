@@ -85,7 +85,7 @@ class Sheet:
 
     def mono(self, s, colour=INK_SOFT, size=8.6, indent=0.045):
         self.fig.text(LEFT + indent, self.y, s, fontsize=size, color=colour,
-                      va="top", ha="left", family="monospace")
+                    va="top", ha="left", family="monospace")
         self.y -= 0.016
 
     def plot(self, draw, height=0.19, caption=None):

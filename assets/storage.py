@@ -302,6 +302,145 @@ VERIFICATION — expected values at config defaults, dt = 1.0 h
         - available_discharge_power_w(1.0) == 0.0 when the device is empty
         - halving dt doubles the energy-limited ceiling but never exceeds
         max_discharge_power_w
+
+
+================================================================================
+B01 SPEC — GIVE THE BATTERY TERMINALS
+================================================================================
+`state_of_charge` above is `energy_wh / capacity_wh`. Exact, noiseless, known
+instantly. No real battery can tell you that — there is no state-of-charge
+sensor, which is the entire reason Kalman filters exist in battery management.
+So the controller has been acting on ground truth it could never have had.
+
+B01 gives the pack something a voltmeter could actually read:
+
+    V_terminal = OCV(soc) - I * R_internal        (discharging, I positive)
+
+That one equation is what makes estimation both possible AND hard: the I*R term
+means a heavy discharge LOOKS like a low state of charge, and untangling the
+two is the filter's whole job.
+
+--------------------------------------------------------------------------------
+DECISION 1 — THE OCV CURVE.  Recommendation: NMC, with LFP as a second run.
+--------------------------------------------------------------------------------
+The shape of OCV(soc) decides whether SoC is observable from voltage at all.
+Measured slopes from the literature:
+
+    NMC     3-9 mV per %SoC over 25-65 %, and >9 mV/%  above 65 %
+    LFP     BELOW 1 mV per %SoC over 35-95 %
+
+The consequence is not subtle. For the same voltage-measurement error, reported
+SoC uncertainty is about 8 % for NMC and about 49 % for LFP. A flat curve means
+the filter's innovation — the gap between predicted and measured voltage —
+carries almost no information about charge, and LFP estimators are known to
+diverge for exactly this reason.
+
+Take NMC/NCA for the baseline: it has the space heritage (the ISS flies Li-ion
+of this family) and it is observable, so B02 has a fair chance of working.
+
+Then run the same filter against an LFP curve as a SECOND experiment. It costs
+one curve and produces a real measured finding — that the chemistry, not the
+algorithm, decides whether the estimate is worth anything. That is B04 material
+and it is nearly free.
+
+--------------------------------------------------------------------------------
+DECISION 2 — CIRCUIT ORDER AND UPDATE RATE.  These are the same decision.
+--------------------------------------------------------------------------------
+Whether to add an RC branch (polarisation) is usually argued on accuracy. Here
+the timestep settles it, and the arithmetic is worth doing:
+
+Li-ion RC time constants run ~10-100 s (fast branch) to ~1000-2000 s (slow).
+At the simulation's 1 h tick, dt = 3600 s:
+
+    exp(-3600/100)  = 2e-16     fast branch: completely gone
+    exp(-3600/1000) = 0.027     97 % relaxed
+    exp(-3600/2000) = 0.165     83 % relaxed
+
+So IF the filter only ever sees one sample per hour, an RC branch models
+something that has already finished happening, and the plain Rint model above
+is correct — one state, SoC alone.
+
+But one sample per hour is not what a battery management system does. A real
+BMS runs its estimator at about 1 Hz while the energy-management controller
+runs far slower. That split is the architecture, not an optimisation: the fast
+loop keeps the estimate honest, the slow loop spends it.
+
+    RECOMMENDED: sub-step the estimator at 60 s inside each 1 h tick.
+                 Current is piecewise-constant hour to hour, so every hour
+                 boundary IS a current step — and at 60 s samples an RC branch
+                 relaxes visibly across the following minutes, which is exactly
+                 what it is for. Two states: SoC and the polarisation voltage.
+                 The controller still only reads SoC once an hour.
+
+    SIMPLER:     update once per tick, Rint only, one state. B02 becomes much
+                 smaller, but the filter has almost nothing to do, and the
+                 "noisy, high-stress current profiles" this project was meant
+                 to exercise never appear.
+
+This is the decision that shapes B02, so make it deliberately.
+
+--------------------------------------------------------------------------------
+DECISION 3 — THE SENSORS.  Without these the filter is pointless.
+--------------------------------------------------------------------------------
+An EKF earns its place by fusing two flawed measurements:
+
+  * COULOMB COUNTING integrates current. Precise short-term, but any current
+    sensor BIAS integrates straight into the estimate and never washes out.
+  * VOLTAGE INVERSION reads SoC from OCV. Noisy and blunt, but UNBIASED, so it
+    anchors the drift.
+
+If both sensors are perfect, you can invert the terminal equation algebraically
+and no filter is needed. So B01 must model the instruments, not only the pack:
+
+    current_a    = true + N(0, sigma_i) + bias_i      bias is the important one
+    voltage_v    = true + N(0, sigma_v)
+
+Pick figures a real shunt and ADC would give. Something like 0.5 % of full
+scale for current noise and a fixed bias of a few tenths of a percent, and a
+few millivolts of voltage noise, is the right order — but source them rather
+than take mine.
+
+--------------------------------------------------------------------------------
+WHAT TO IMPLEMENT
+--------------------------------------------------------------------------------
+On BatteryBank, below `_clamp_energy`:
+
+  1. open_circuit_voltage_v(soc) -> float
+     The OCV curve at a given state of charge. Monotonically increasing —
+     a curve that is flat or non-monotonic anywhere makes SoC unobservable
+     there, which is the LFP problem above.
+
+  2. terminal_voltage_v(current_a) -> float
+     OCV(self.state_of_charge) - current_a * r_internal_ohm.
+     Sign convention: current_a POSITIVE discharging. Get this backwards and
+     the pack gains voltage under load.
+
+  3. measure(current_a, rng) -> (current_a, voltage_v)
+     The instruments, not the pack. Returns what a sensor would report.
+
+New constants in config.py, each with its source: nominal cell voltage, cells
+in series, the OCV curve's coefficients or breakpoints, internal resistance,
+and the sensor noise figures.
+
+--------------------------------------------------------------------------------
+TRAPS
+--------------------------------------------------------------------------------
+  * SIGN. Positive current discharging, so terminal voltage FALLS under load.
+    The existing charge()/discharge() split means you will be tempted to use
+    magnitude; do not — the filter needs the sign.
+  * UNITS. This class stores energy in Wh; a coulomb counter wants Ah. The
+    conversion is via pack voltage and is not a constant, because OCV moves
+    with SoC. Decide where the boundary sits and state it.
+  * THE CURVE MUST COVER THE FLOOR. soc_min is 0.05, and OCV(0.05) must be a
+    real voltage, not an extrapolation off the end of a fit.
+  * DO NOT LET THE PLANT READ THE ESTIMATE. BatteryBank keeps its exact
+    state_of_charge — that stays the ground truth B04 measures against. The
+    estimate is a separate quantity that only the controller consumes.
+
+@see Plett, G. L. (2004), "Extended Kalman filtering for battery management
+    systems of LiPB-based HEV battery packs", J. Power Sources 134(2):262-276,
+    Parts 1-3. The canonical treatment of exactly this problem.
+@see estimator/README.md for how B01 feeds B02.
 """
 
 from assets.base_asset import PowerStorage
@@ -405,6 +544,26 @@ class BatteryBank(PowerStorage):
         floor_wh = self.soc_min * self.capacity_wh
         ceiling_wh = self.soc_max * self.capacity_wh
         self.energy_wh = min(max(self.energy_wh, floor_wh), ceiling_wh)
+
+    # =========================================================================
+    # START EDITING HERE — B01. Full spec in the module docstring above.
+    # =========================================================================
+    def open_circuit_voltage_v(self, soc: float) -> float:
+        """Pack OCV at a state of charge. Must be monotonically increasing."""
+        raise NotImplementedError("B01 method 1")
+
+    def terminal_voltage_v(self, current_a: float) -> float:
+        """What a voltmeter across the pack reads. Positive current discharges."""
+        raise NotImplementedError("B01 method 2")
+
+    def measure(self, current_a: float, rng):
+        """The instruments, not the pack: (current_a, voltage_v) as REPORTED.
+
+        The bias on the current channel is the term that matters — it
+        integrates straight into a coulomb count and never washes out, which
+        is the drift the filter exists to correct.
+        """
+        raise NotImplementedError("B01 method 3")
 
 
 class RegenerativeFuelCell(PowerStorage):
