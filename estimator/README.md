@@ -130,6 +130,13 @@ runs to 42 % across one lunar night and keeps going.
 The maths in full: `docs/estimator_formulas.pdf` for the plant,
 `docs/ekf_formulas.pdf` for the filter.
 
+**If C++ is the unfamiliar part rather than the filter**, read
+`CPP_NOTES.md` first. It is not a tutorial — it is the specific subset these
+two functions need, built around a line-for-line translation of the B01
+`open_circuit_voltage_v` you already wrote, plus the five things that will
+actually bite (`params::` prefixes, integer division, `-Werror`, missing
+headers, and how to read a C++ error message).
+
 ### B03 — the HIL bridge  ·  *Claude, plumbing*
 
 Controller on the ESP32, physics on the host, serial between them. The
