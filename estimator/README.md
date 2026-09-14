@@ -77,10 +77,58 @@ untangling the two is the filter's whole job.
 Lives in the main simulation (`assets/storage.py`), not here — it is battery
 physics, not estimator code.
 
-### B02 — the EKF  ·  *user, algorithm*
+### B02 — the EKF  ·  *user, algorithm*  ·  **ready to write**
 
-`include/ekf.hpp` carries the interface and the spec; `src/ekf.cpp` is where it
-goes. Native tests in `test/` run against profiles exported from the simulation.
+`include/ekf.hpp` carries the interface, the six equations and four traps.
+`src/ekf.cpp` is where they go. Two functions:
+
+  * `docv_dsoc(soc)` — the measurement Jacobian, the analytic derivative of
+    `params::ocv_v`. The trap is the **chain rule**: the polynomial is in
+    `x = 2*soc - 1`, so differentiating the coefficients gives `dOCV/dx` and
+    you still owe a factor of 2. Forget it and every gain is half what it
+    should be — the filter still runs, still converges, just slower, which is
+    exactly the kind of wrong that survives a demo.
+  * `Ekf::update(...)` — the six lines.
+
+`include/battery_params.hpp` is **generated** from `config.py` by
+`tools/export_params.py`, so the filter and the simulation cannot disagree
+about the battery. `ocv_v` is generated too — a direct port of
+`BatteryBank.open_circuit_voltage_v` — but its derivative deliberately is not,
+because that is the heart of the filter.
+
+**What a Kalman filter is**, if it is new: a weighted average between something
+you predicted and something you measured, weighted by how much you trust each.
+You are walking a corridor with your eyes shut, counting paces — smooth, but
+your error grows without bound. Occasionally you glimpse a doorway through fog
+— blurry, but it does not drift. Coulomb counting is the paces; terminal
+voltage is the doorway.
+
+With one state there are **no matrices**. All six equations are scalar:
+
+```
+predict:   z <- z - eta*I*dt/(3600*Q)
+           P <- P + Q_proc
+
+correct:   H <- dOCV/dz                  at the PREDICTED state
+           K <- P*H / (H*H*P + R_meas)
+           z <- z + K*(V_meas - V_pred)
+           P <- (1 - K*H)*P
+```
+
+`K` is the only interesting quantity: near 0 means ignore the voltmeter, near 1
+means trust it completely. And note where `H` sits — a flat OCV curve drives
+`H` to zero, which drives `K` to zero, and the filter stops listening however
+good the voltmeter is. That is why LFP estimators diverge, and it is chemistry
+rather than tuning.
+
+**Expect a residual offset.** The bias is not in the state vector, so this
+filter cannot estimate it and will not remove it. It should settle where the
+voltage correction balances the coulomb drift. That is the result, not a bug:
+the filter converts UNBOUNDED drift into BOUNDED error. Pure coulomb counting
+runs to 42 % across one lunar night and keeps going.
+
+The maths in full: `docs/estimator_formulas.pdf` for the plant,
+`docs/ekf_formulas.pdf` for the filter.
 
 ### B03 — the HIL bridge  ·  *Claude, plumbing*
 

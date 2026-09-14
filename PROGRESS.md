@@ -87,10 +87,33 @@ number we can state.
       the filter is written and proven NATIVELY first and the board comes
       later — which is the right order anyway, and forces the filter to be
       portable C++ with no framework dependencies.
-- [ ] **B01** A battery terminal model the EKF can observe — OCV curve plus
+- [x] **B01** `assets/storage.py` — DONE 2026-09-14. Physics by the user:
+      a degree-7 NMC OCV fit (monotonic, min step +4288 uV), terminal voltage
+      with a 5.96 V droop at the 417 A rating, and an instrument model whose
+      BIAS is fixed and deliberate rather than drawn. Internal resistance is
+      DERIVED from BATTERY_DISCHARGE_EFFICIENCY (14.3 mohm; I^2R = 2487 W
+      against the 2500 W that 5 % of 50 kW implies), not chosen, so the same
+      loss is not counted twice. Two review defects: efficiency used where
+      resistance belonged (-392 V under load), and cell volts where pack volts
+      were promised. 300 tests still pass — nothing here touches the energy
+      books.
+- [x] **B00.5** Environment: the venv was inside iCloud Drive with 8120 of its
+      8167 files evicted to the cloud. `import matplotlib` cost 229.9 s cold
+      against 0.22 s warm. Rebuilt at ~/.venvs/lunar with .venv as a symlink;
+      the full suite went from 704.96 s to 2.47 s.
+- [~] **B01 (superseded line)** A battery terminal model the EKF can observe — OCV curve plus
       internal resistance, so there is a voltage to measure rather than a
       state to read. (USER — physics)
-- [ ] **B02** The EKF itself, C++ on the ESP32. (USER)
+- [~] **B02** `estimator/` — spec, generated params, plumbing and 14 tests by
+      Claude 2026-09-14; the ALGORITHM IS THE USER'S. 5 pass, 9 skip across
+      two functions: `docv_dsoc` (the Jacobian, with the chain-rule trap) and
+      `Ekf::update` (the six scalar lines). ONE STATE, so no matrices.
+      `battery_params.hpp` is generated from config.py so the filter and the
+      simulation cannot disagree about the battery.
+      Expected result, recorded in advance so it is not mistaken for failure:
+      the bias is not in the state vector, so the filter cannot remove it and
+      should settle at a bounded offset. Converting UNBOUNDED drift into
+      BOUNDED error IS the finding.
 - [ ] **B03** The HIL bridge: controller on the ESP32, physics on the host,
       serial between them. This is what "hardware" should mean here — the
       controller was written numpy-free at Step 7 precisely so it could port

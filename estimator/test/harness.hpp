@@ -62,7 +62,7 @@ inline void close(double got, double want, double rel, const std::string& what) 
     if (diff > rel * scale) {
         char buf[256];
         std::snprintf(buf, sizeof buf, "%s — got %.10g, want %.10g (rel %.3g)",
-                      what.c_str(), got, want, diff / (scale > 0 ? scale : 1));
+                    what.c_str(), got, want, diff / (scale > 0 ? scale : 1));
         throw Failure(buf);
     }
 }
