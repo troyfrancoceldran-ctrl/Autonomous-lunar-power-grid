@@ -17,3 +17,6 @@ data/figures/
 # PNG previews written beside the formula PDF are a build artifact of
 # docs/make_protection_formulas.py, used to eyeball the PDF before shipping it.
 docs/_formulas_preview_*.png
+
+# CMake build tree for the estimator — a build artifact, not source.
+estimator/build/

@@ -78,6 +78,15 @@ is a table. It attacks the headline finding directly: if the estimator lags
 during a fast discharge, the power-limited hours should get WORSE, and by a
 number we can state.
 
+- [x] **B00** `estimator/` scaffolded 2026-09-14 (Claude). Native CMake build,
+      a dependency-free test harness that reports SKIP for unwritten methods
+      exactly as the Python suite does, and a placeholder interface. 5 passed,
+      1 skipped, exit 0.
+      TOOLCHAIN, MEASURED: clang 21 / g++ / cmake / make all present; NO
+      PlatformIO, ESP-IDF or arduino-cli; no board attached; no pyserial. So
+      the filter is written and proven NATIVELY first and the board comes
+      later — which is the right order anyway, and forces the filter to be
+      portable C++ with no framework dependencies.
 - [ ] **B01** A battery terminal model the EKF can observe — OCV curve plus
       internal resistance, so there is a voltage to measure rather than a
       state to read. (USER — physics)
