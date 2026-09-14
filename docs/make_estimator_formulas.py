@@ -123,8 +123,9 @@ def draw_slope(ax):
     ax.set_xlabel("state of charge  [%]", fontsize=8, color=INK_SOFT)
     ax.set_ylabel("|dOCV/dz|  [mV per %SoC]", fontsize=8, color=INK_SOFT)
     ax.set_xlim(0, 100)
-    ax.set_ylim(5, 5000)
-    ax.legend(loc="lower center", frameon=False, fontsize=7.5, labelcolor=INK_SOFT)
+    ax.set_ylim(1.5, 5000)
+    ax.legend(loc="lower center", ncol=2, frameon=False, fontsize=7.5,
+              labelcolor=INK_SOFT)
     _axes(ax)
 
 
@@ -222,25 +223,26 @@ def page_two():
            "literature:")
     s.space(0.008)
     x0 = LEFT + 0.03
-    for name, expr, note in [
+    for name, expr, note, drop in [
         ("Polynomial", r"$\mathrm{OCV}(z)=\sum_{i=0}^{n} a_i z^{i}$",
-         "fits anything; monotonicity not guaranteed"),
+         "fits anything; monotonicity not guaranteed", 0.044),
         ("Shepherd", r"$\mathrm{OCV}(z)=E_0-\frac{K}{z}+A e^{-Bz}$",
-         r"diverges as $z\to0$"),
+         r"diverges as $z\to0$", 0.032),
         ("Nernst", r"$\mathrm{OCV}(z)=E_0+K_1\ln z+K_2\ln(1-z)$",
-         r"diverges at BOTH ends"),
+         r"diverges at BOTH ends", 0.032),
         ("Plett combined",
          r"$\mathrm{OCV}(z)=K_0-\frac{K_1}{z}-K_2 z+K_3\ln z+K_4\ln(1-z)$",
-         "accurate mid-range; same endpoint problem"),
+         "accurate mid-range; same endpoint problem", 0.036),
         ("Lookup + linear", r"$\mathrm{OCV}(z)$ interpolated between breakpoints",
-         "monotonic by construction"),
+         "monotonic by construction", 0.030),
     ]:
-        # The note goes BELOW the equation, not beside it: the polynomial's
-        # summation carries a lower limit that reaches into the next line.
+        # The note goes BELOW the equation, not beside it, and each row states
+        # its own drop: the polynomial's summation carries a lower limit that
+        # reaches much further down than the other four expressions do.
         s.fig.text(x0, s.y, name, fontsize=9.5, color=INK, va="top", weight="bold")
         s.fig.text(x0 + 0.17, s.y - 0.004, expr, fontsize=11, color=INK, va="top")
-        s.fig.text(x0, s.y - 0.034, note, fontsize=8, color=INK_SOFT, va="top")
-        s.y -= 0.058
+        s.fig.text(x0, s.y - drop, note, fontsize=8, color=INK_SOFT, va="top")
+        s.y -= drop + 0.022
 
     s.space(0.004)
     s.heading("Take the lookup table")
