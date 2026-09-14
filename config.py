@@ -256,3 +256,89 @@ SSPC_I2T_RATING_A2S: float = 2000.0
 # one above it, or a feeder fault takes out the whole bus. NASA calls the goal
 # "zonal protection" — the breaker nearest the fault trips and nothing else.
 PROTECTION_COORDINATION_MARGIN_S: float = 1e-4
+
+
+# --- Battery terminals and instruments (B01) ---------------------------------
+# Everything above describes what the battery STORES. This section describes
+# what it EXPOSES — a voltage a meter could read — so that state of charge
+# becomes something to infer rather than something to look up.
+#
+# NOTE ON THE UNASSIGNED NAMES BELOW. Several constants here are declared with
+# a type and no value. That is deliberate: a bare annotation binds no module
+# attribute, so `from config import X` raises ImportError until you assign one.
+# A placeholder number would import cleanly and be silently wrong, which is the
+# worse failure by a distance.
+
+# Open-circuit voltage, per CELL, as a degree-7 least-squares fit of a standard
+# NMC/NCA discharge curve. Coefficients are in the mapped variable
+#     x = 2 * soc - 1
+# so the fit is conditioned on [-1, 1] rather than [0, 1]. ASCENDING order:
+# OCV(x) = c[0] + c[1]x + c[2]x^2 + ... — evaluate with Horner, reversed.
+#
+# Max fit error 6.3 mV per cell, and VERIFIED MONOTONIC on [0.05, 1.0], which
+# is the property the whole estimator rests on: where dOCV/dz <= 0, one voltage
+# means two charges and state of charge stops being observable at all.
+#
+# The same fit against an LFP curve FOLDS BACK at every degree from 5 to 9
+# (dOCV/dz goes negative around z = 0.16-0.38), so the LFP comparison in B04
+# needs a lookup table or a piecewise fit, not this form. Write
+# open_circuit_voltage_v so the curve can be swapped without touching the
+# method body.
+OCV_POLY_NMC: tuple = (
+    +3.736277252,   # x^0
+    +0.282556708,   # x^1
+    +0.022414644,   # x^2
+    +0.393657303,   # x^3
+    +0.331825038,   # x^4
+    -0.860396242,   # x^5
+    -0.490196078,   # x^6
+    +0.784167834,   # x^7
+)
+
+# Cells in series. Sets pack voltage: CELLS_SERIES * OCV(soc). The pack has to
+# sit sensibly against USER_BUS_VOLTAGE_V = 120 V — a 32S NMC pack runs about
+# 96 V empty, 118 V nominal and 134 V full, which is why T03's converters exist.
+CELLS_SERIES: int = 32
+
+# Pack ohmic resistance. DO NOT PICK THIS INDEPENDENTLY — it is already in this
+# file wearing different clothes. storage.py spends `delivered / eta` on
+# discharge, so eta is delivered over spent, which at the terminals is exactly
+#     eta = V / OCV = 1 - I*R/OCV      =>      R = OCV * (1 - eta) / I_rated
+# Evaluate at the rated operating point: pack OCV at 50 % SoC, and the rated
+# current BATTERY_MAX_DISCHARGE_POWER_W / USER_BUS_VOLTAGE_V.
+#
+# Cross-check the answer before trusting it: I^2 R should come out at about
+# 5 % of 50 kW, because that is the same loss BATTERY_DISCHARGE_EFFICIENCY
+# already claims. If it does not, one of the two is wrong.
+#
+# The gain from having both: eta is fixed, R is fixed, but I is not — so
+# efficiency becomes current-dependent, as a real pack's is. The flat 0.95 was
+# only ever correct at full load, and the battery spends most of the night
+# nowhere near it.
+BATTERY_R_INTERNAL_OHM: float = 0.0143
+
+# --- the instruments, which are not the pack --------------------------------
+# An estimator earns its place by fusing two flawed measurements. Model the
+# flaws or there is nothing to fuse: with perfect sensors the terminal equation
+# inverts algebraically and no filter is needed.
+
+# Current-channel noise, 1 sigma, per sample. Zero-mean, so it averages out and
+# costs the coulomb count nothing in the long run.
+CURRENT_SENSOR_NOISE_A: float = 0.5
+
+# Current-channel BIAS — a FIXED offset, not a random draw. This is the term
+# that matters: it integrates straight into a coulomb count and never washes
+# out, so the error grows without bound and has no restoring force. Correcting
+# it is the entire reason the filter exists.
+#
+# Keep it deterministic rather than drawn at construction. This project
+# reproduces exactly (see RANDOM_SEED), a per-instance random bias would make
+# every run's battery subtly different, and B04 wants to SWEEP this value
+# deliberately — which you cannot do to something you randomised.
+CURRENT_SENSOR_BIAS_A: float = 2.0
+
+# Voltage-channel noise, 1 sigma, per sample. Blunt but UNBIASED, which is what
+# lets it anchor the drift above. Its cost in state of charge is this divided
+# by the OCV slope — so the same voltmeter is worth eleven times more on NMC
+# than on LFP.
+VOLTAGE_SENSOR_NOISE_V: float = 0.0068

@@ -109,6 +109,72 @@ _clamp_energy() -> None                                            [internal]
     Pin energy_wh inside [soc_min, soc_max] * capacity_wh against float drift
     accumulated over 1344 timesteps. Not part of the PowerStorage contract.
 
+--- B01: the terminals, and the instruments reading them --------------------
+Everything above describes what the pack STORES. These describe what it
+EXPOSES, so that state of charge becomes something to infer rather than to
+look up. Nothing here touches charge() or discharge(): the energy books are
+unchanged, and state_of_charge remains the exact ground truth that B04
+measures an estimate against.
+
+open_circuit_voltage_v(soc) -> float
+    Pack open-circuit voltage at a state of charge.
+
+    @param  soc  Fill fraction in [0, 1].
+    @return PACK volts — cell volts times cells_series. 105.7 V at the 0.05
+            floor, 134.4 V full.
+
+    Evaluates OCV_POLY_NMC by Horner in the mapped variable x = 2*soc - 1.
+    The coefficients are ASCENDING, so the loop runs reversed(); running it
+    forwards evaluates a different polynomial that still returns plausible
+    voltages.
+
+    @note MONOTONICITY IS THE CONTRACT. Where dOCV/dsoc <= 0, one voltage
+        means two charges and state of charge stops being observable at all.
+        Measured minimum step over [0.05, 1.0]: +4288 uV. The same fit against
+        an LFP curve folds back at every degree from 5 to 9, which is why the
+        B04 comparison needs a different curve form rather than new
+        coefficients.
+    @note Returns PACK volts because internal resistance is a pack quantity
+        and the voltmeter reads the pack. Mixing the two scales is a factor-
+        of-32 error that surfaces looking like a units bug elsewhere.
+
+terminal_voltage_v(current_a) -> float
+    What a voltmeter across the pack would read under load.
+
+    @param  current_a  Pack current [A], POSITIVE discharging.
+    @return Terminal volts: open_circuit_voltage_v(soc) - current_a * R.
+
+    @note The I*R term is what makes estimation hard rather than arithmetic:
+        a heavy discharge LOOKS like a low state of charge, and separating the
+        two is the filter's whole job. 5.96 V of droop at the 417 A rating.
+    @note R is battery_internal_r, NOT discharge_efficiency. The resistance
+        was DERIVED from the efficiency at one operating point — R = OCV(1-eta)
+        / I_rated — but it is not the same quantity, and substituting the
+        dimensionless 0.95 for 0.0143 ohm subtracts amps from volts and puts
+        the pack at -392 V under load.
+
+measure(current_a, rng) -> tuple[float, float]
+    What the INSTRUMENTS report, as distinct from what is true.
+
+    @param  current_a  True pack current [A].
+    @param  rng        random.Random, so a run reproduces.
+    @return (reported_current_a, reported_voltage_v).
+
+    Current carries a fixed bias plus zero-mean noise; voltage carries
+    zero-mean noise only.
+
+    @note THE BIAS IS THE POINT. Noise averages out and costs a coulomb count
+        nothing over time; a bias integrates straight into it and never washes
+        out. At 2.0 A against a 1689 Ah pack that is 42 % of state of charge
+        drifted away across one 354 h night, with no restoring force. It is a
+        fixed constant rather than a draw so that runs reproduce and B04 can
+        sweep it deliberately.
+    @note The voltage is computed from the TRUE current, not the reported one.
+        The pack responds to physics; only the instrument sees the corrupted
+        value. Feeding the biased current into the plant would let a sensor
+        error change the battery's actual behaviour, which is backwards and
+        would make the experiment circular.
+
 --------------------------------------------------------------------------------
 class RegenerativeFuelCell(PowerStorage)
 --------------------------------------------------------------------------------
@@ -366,16 +432,16 @@ runs far slower. That split is the architecture, not an optimisation: the fast
 loop keeps the estimate honest, the slow loop spends it.
 
     RECOMMENDED: sub-step the estimator at 60 s inside each 1 h tick.
-                 Current is piecewise-constant hour to hour, so every hour
-                 boundary IS a current step — and at 60 s samples an RC branch
-                 relaxes visibly across the following minutes, which is exactly
-                 what it is for. Two states: SoC and the polarisation voltage.
-                 The controller still only reads SoC once an hour.
+                Current is piecewise-constant hour to hour, so every hour
+                boundary IS a current step — and at 60 s samples an RC branch
+                relaxes visibly across the following minutes, which is exactly
+                what it is for. Two states: SoC and the polarisation voltage.
+                The controller still only reads SoC once an hour.
 
     SIMPLER:     update once per tick, Rint only, one state. B02 becomes much
-                 smaller, but the filter has almost nothing to do, and the
-                 "noisy, high-stress current profiles" this project was meant
-                 to exercise never appear.
+                smaller, but the filter has almost nothing to do, and the
+                "noisy, high-stress current profiles" this project was meant
+                to exercise never appear.
 
 This is the decision that shapes B02, so make it deliberately.
 
@@ -405,18 +471,18 @@ WHAT TO IMPLEMENT
 --------------------------------------------------------------------------------
 On BatteryBank, below `_clamp_energy`:
 
-  1. open_circuit_voltage_v(soc) -> float
-     The OCV curve at a given state of charge. Monotonically increasing —
-     a curve that is flat or non-monotonic anywhere makes SoC unobservable
-     there, which is the LFP problem above.
+1. open_circuit_voltage_v(soc) -> float
+    The OCV curve at a given state of charge. Monotonically increasing —
+    a curve that is flat or non-monotonic anywhere makes SoC unobservable
+    there, which is the LFP problem above.
 
-  2. terminal_voltage_v(current_a) -> float
+2. terminal_voltage_v(current_a) -> float
      OCV(self.state_of_charge) - current_a * r_internal_ohm.
-     Sign convention: current_a POSITIVE discharging. Get this backwards and
-     the pack gains voltage under load.
+    Sign convention: current_a POSITIVE discharging. Get this backwards and
+    the pack gains voltage under load.
 
-  3. measure(current_a, rng) -> (current_a, voltage_v)
-     The instruments, not the pack. Returns what a sensor would report.
+3. measure(current_a, rng) -> (current_a, voltage_v)
+    The instruments, not the pack. Returns what a sensor would report.
 
 New constants in config.py, each with its source: nominal cell voltage, cells
 in series, the OCV curve's coefficients or breakpoints, internal resistance,
@@ -461,7 +527,13 @@ from config import (BATTERY_CAPACITY_WH,
                     RFC_MAX_CHARGE_POWER_W,
                     RFC_MAX_DISCHARGE_POWER_W,
                     RFC_SOC_MIN,
-                    RFC_SOC_MAX)
+                    RFC_SOC_MAX,
+                    BATTERY_R_INTERNAL_OHM,
+                    CELLS_SERIES,
+                    OCV_POLY_NMC,
+                    CURRENT_SENSOR_BIAS_A,
+                    CURRENT_SENSOR_NOISE_A,
+                    VOLTAGE_SENSOR_NOISE_V,)
 
 
 class BatteryBank(PowerStorage):
@@ -475,7 +547,14 @@ class BatteryBank(PowerStorage):
                 , charge_efficiency=BATTERY_CHARGE_EFFICIENCY
                 , discharge_efficiency=BATTERY_DISCHARGE_EFFICIENCY
                 , soc_min=BATTERY_SOC_MIN
-                , soc_max=BATTERY_SOC_MAX):
+                , soc_max=BATTERY_SOC_MAX
+                , battery_internal_r = BATTERY_R_INTERNAL_OHM
+                , cells = CELLS_SERIES
+                , curr_sensor_bias = CURRENT_SENSOR_BIAS_A
+                , curr_sensor_noise = CURRENT_SENSOR_NOISE_A
+                , volt_sensor_noise = VOLTAGE_SENSOR_NOISE_V):
+        
+        
         """Store the nameplate spec; derive starting energy from initial_soc."""
         self.name = name
         self.capacity_wh = capacity_wh
@@ -487,6 +566,11 @@ class BatteryBank(PowerStorage):
         self.soc_min = soc_min
         self.soc_max = soc_max
         self.energy_wh = initial_soc * capacity_wh
+        self.battery_internal_r = battery_internal_r
+        self.cells = cells
+        self.curr_sensor_bias = curr_sensor_bias
+        self.curr_sensor_noise = curr_sensor_noise
+        self.volt_sensor_noise = volt_sensor_noise
 
     @property
     def state_of_charge(self) -> float:
@@ -545,26 +629,25 @@ class BatteryBank(PowerStorage):
         ceiling_wh = self.soc_max * self.capacity_wh
         self.energy_wh = min(max(self.energy_wh, floor_wh), ceiling_wh)
 
-    # =========================================================================
-    # START EDITING HERE — B01. Full spec in the module docstring above.
-    # =========================================================================
+    # --- B01: the terminals, and the instruments (Troy Celdran) -------------
     def open_circuit_voltage_v(self, soc: float) -> float:
-        """Pack OCV at a state of charge. Must be monotonically increasing."""
-        raise NotImplementedError("B01 method 1")
+        """Pack OCV at a state of charge; monotonic by contract."""
+        x = 2.0 * soc - 1.0
+        result = 0.0
+        for coefficient in reversed(OCV_POLY_NMC):
+            result = result * x + coefficient
+        return result * self.cells
 
     def terminal_voltage_v(self, current_a: float) -> float:
-        """What a voltmeter across the pack reads. Positive current discharges."""
-        raise NotImplementedError("B01 method 2")
+        """What a voltmeter reads under load. Positive current discharges."""
+        V_terminal = self.open_circuit_voltage_v(self.state_of_charge) - current_a * self.battery_internal_r 
+        return V_terminal
 
     def measure(self, current_a: float, rng):
-        """The instruments, not the pack: (current_a, voltage_v) as REPORTED.
-
-        The bias on the current channel is the term that matters — it
-        integrates straight into a coulomb count and never washes out, which
-        is the drift the filter exists to correct.
-        """
-        raise NotImplementedError("B01 method 3")
-
+        """What the instruments report; the bias is the term that drifts."""
+        reported_current = current_a + self.curr_sensor_bias + rng.gauss(0, self.curr_sensor_noise)
+        reported_voltage = self.terminal_voltage_v(current_a) + rng.gauss(0, self.volt_sensor_noise)
+        return reported_current, reported_voltage
 
 class RegenerativeFuelCell(PowerStorage):
     """Electrolyzer + fuel cell; lossy and slow, but deep enough for the night."""
