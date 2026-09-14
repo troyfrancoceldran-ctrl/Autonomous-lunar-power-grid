@@ -1,6 +1,12 @@
 __pycache__/
 *.py[cod]
-.venv/
+# .venv is a SYMLINK to ~/.venvs/lunar, deliberately outside iCloud Drive.
+# Desktop is iCloud-synced, and with the venv living there macOS evicted 8120
+# of its 8167 files to the cloud — `import matplotlib` cost 230 s cold against
+# 0.22 s warm, and the suite took 11m44s instead of 2.5s. No trailing slash:
+# that pattern matches a directory and would miss the symlink.
+.venv
+.venv.icloud-old
 venv/
 .DS_Store
 data/output_logs/*.csv
