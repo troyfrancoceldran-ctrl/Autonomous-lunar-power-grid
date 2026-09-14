@@ -121,11 +121,17 @@ class Sheet:
     def space(self, amount=0.012):
         self.y -= amount
 
-    def footer(self, page, total):
+    def footer(self, page, total, label="T04 protection"):
+        """Page number and a running label.
+
+        The label is a parameter because this Sheet is reused by
+        make_estimator_formulas.py, and a hardcoded one had every page of the
+        estimator sheet claiming to be about protection.
+        """
         self.fig.text(RIGHT, 0.035, f"{page} / {total}", fontsize=8,
                     color=INK_FAINT, ha="right")
         self.fig.text(LEFT, 0.035,
-                    "lunar_microgrid_sim — T04 protection", fontsize=8,
+                    f"lunar_microgrid_sim — {label}", fontsize=8,
                     color=INK_FAINT, ha="left")
 
 
