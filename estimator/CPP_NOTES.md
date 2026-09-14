@@ -136,6 +136,25 @@ not need to write any new ones — just do not delete the ones that are there.
 
 ---
 
+## One habit worth not bringing over
+
+```cpp
+using namespace std;   // works, and you will see it in tutorials everywhere
+```
+
+It compiles. It is also how C++ codebases acquire name collisions that only
+appear months later, when someone includes a header that happens to define
+its own `count` or `distance` and a call silently binds to the wrong one.
+
+Write `std::clamp`, `std::abs`, `std::min` in full. Four extra characters,
+and the reader always knows where a name came from. The same reasoning as
+`import numpy as np` over `from numpy import *`.
+
+Unused `#include`s are harmless — `<iostream>` costs nothing if you never
+print — but drop them once the debugging is done.
+
+---
+
 ## What you can safely ignore
 
 For this task you need **none** of:
