@@ -9,6 +9,8 @@ import {
   BATTERY_CAPACITY_WH, BATTERY_INITIAL_SOC, BATTERY_MAX_CHARGE_POWER_W,
   BATTERY_MAX_DISCHARGE_POWER_W, BATTERY_CHARGE_EFFICIENCY,
   BATTERY_DISCHARGE_EFFICIENCY, BATTERY_SOC_MIN, BATTERY_SOC_MAX,
+  OCV_POLY_NMC, CELLS_SERIES, BATTERY_R_INTERNAL_OHM,
+  CURRENT_SENSOR_BIAS_A, CURRENT_SENSOR_NOISE_A, VOLTAGE_SENSOR_NOISE_V,
   H2_SPECIFIC_ENERGY_WH_PER_KG, O2_TO_H2_MASS_RATIO, ELECTROLYZER_EFFICIENCY,
   FUEL_CELL_EFFICIENCY, RFC_H2_CAPACITY_KG, RFC_INITIAL_SOC,
   RFC_MAX_CHARGE_POWER_W, RFC_MAX_DISCHARGE_POWER_W, RFC_SOC_MIN, RFC_SOC_MAX,
@@ -29,6 +31,11 @@ export class BatteryBank extends PowerStorage {
       name, capacityWh, initialSoc, maxChargePowerW, maxDischargePowerW,
       chargeEfficiency, dischargeEfficiency, socMin, socMax,
     });
+    this.cells = CELLS_SERIES;
+    this.batteryInternalR = BATTERY_R_INTERNAL_OHM;
+    this.currSensorBias = CURRENT_SENSOR_BIAS_A;
+    this.currSensorNoise = CURRENT_SENSOR_NOISE_A;
+    this.voltSensorNoise = VOLTAGE_SENSOR_NOISE_V;
     this.energyWh = initialSoc * capacityWh;
   }
 
@@ -60,6 +67,36 @@ export class BatteryBank extends PowerStorage {
     this.energyWh -= energyOutWh;
     this.clampEnergy();
     return deliveredPowerW;
+  }
+
+  // --- B01: the terminals, and the instruments -----------------------------
+  // Port of BatteryBank.open_circuit_voltage_v / terminal_voltage_v / measure.
+  // Horner over ASCENDING coefficients, which is why the loop runs downward;
+  // evaluating it upward gives a different polynomial that still returns
+  // plausible voltages.
+
+  /** Pack OCV at a state of charge; monotonic by contract. */
+  openCircuitVoltageV(soc) {
+    const x = 2.0 * soc - 1.0;
+    let result = 0.0;
+    for (let i = OCV_POLY_NMC.length - 1; i >= 0; i -= 1) {
+      result = result * x + OCV_POLY_NMC[i];
+    }
+    return result * this.cells;
+  }
+
+  /** What a voltmeter reads under load. Positive current discharges. */
+  terminalVoltageV(currentA) {
+    return this.openCircuitVoltageV(this.stateOfCharge)
+      - currentA * this.batteryInternalR;
+  }
+
+  /** What the instruments report; the bias is the term that drifts. */
+  measure(currentA, rng) {
+    return [
+      currentA + this.currSensorBias + rng.gauss(0, this.currSensorNoise),
+      this.terminalVoltageV(currentA) + rng.gauss(0, this.voltSensorNoise),
+    ];
   }
 
   get deliverableEnergyWh() {

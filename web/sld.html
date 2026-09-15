@@ -275,6 +275,14 @@ noon at full moon, so this disc reads the outpost's own clock.</title>
         <div class="fill" id="hrFill" style="width:50%"></div>
       </div>
     </div>
+    <div class="sig">
+      <h2>Estimator — battery charge</h2>
+      <div class="val" id="ekfVal">0.9500</div>
+      <div class="note" id="ekfNote">inferred from voltage; no sensor reads this</div>
+      <div class="track">
+        <div class="fill" id="ekfFill" style="width:95%"></div>
+      </div>
+    </div>
   </section>
 
   <figure>
@@ -348,6 +356,33 @@ noon at full moon, so this disc reads the outpost's own clock.</title>
         <span><i style="background:var(--blue)"></i>Fleet</span>
         <span><i style="background:var(--orange)"></i>Battery</span>
         <span><i style="background:var(--green)"></i>Fuel cell</span>
+      </div>
+    </figure>
+
+    <figure class="chart">
+      <h3>What no instrument can measure</h3>
+      <p>There is no state-of-charge sensor. The dashed line is the truth the
+         simulation knows; the solid line is what an EKF infers from terminal
+         voltage and a current sensor biased by 2&#8239;A.</p>
+      <svg id="ch-ekf" viewBox="0 0 480 150" role="img"
+           aria-label="True battery state of charge against the filter's estimate."></svg>
+      <div class="legend">
+        <span><i style="background:var(--ink)"></i>truth</span>
+        <span><i style="background:var(--blue)"></i>EKF estimate</span>
+        <span><i style="background:var(--red)"></i>coulomb counting alone</span>
+      </div>
+    </figure>
+
+    <figure class="chart">
+      <h3>Kalman gain — how much it believes the voltmeter</h3>
+      <p>Near zero the filter has stopped listening and is coasting on its own
+         arithmetic. The gain follows the OCV slope, so it collapses wherever
+         the curve flattens — chemistry, not tuning.</p>
+      <svg id="ch-gain" viewBox="0 0 480 150" role="img"
+           aria-label="Kalman gain and estimate error across the run."></svg>
+      <div class="legend">
+        <span><i style="background:var(--green)"></i>gain K</span>
+        <span><i style="background:var(--orange)"></i>estimate &minus; truth</span>
       </div>
     </figure>
 
@@ -601,6 +636,21 @@ const BATTERY_CHARGE_EFFICIENCY = 0.95;
 
 const BATTERY_DISCHARGE_EFFICIENCY = 0.95;
 
+// COULOMBIC efficiency is NOT the energy efficiency above, and conflating the
+// two is a modelling error rather than a rounding one. The 0.95 pair counts
+// WATT-HOURS: it carries the ohmic and conversion losses, most of which leave
+// as heat across the internal resistance. Coulombic efficiency counts CHARGE —
+// amp-hours in against amp-hours out — and for lithium-ion that is essentially
+// unity, commonly quoted above 99 % and above 99.9 % for a well-behaved cell,
+// because the electrons that go in come back out; what is lost is the VOLTAGE
+// they come back at, not their number.
+//
+// The estimator counts charge, the plant keeps its books in energy, and the
+// two must agree about how the state moves or B04 measures my bookkeeping
+// instead of the filter. Declared as exactly 1.0: a simplification, stated,
+// rather than a borrowed number that happens to be wrong by 5 %.
+const BATTERY_COULOMBIC_EFFICIENCY = 1.0;
+
 // Controller thresholds, as fractions of the CAPACITY-WEIGHTED FLEET reserve
 // (see power_bus.aggregate_soc), not of any one device.
 const SOC_SHED_THRESHOLD = 0.3;
@@ -776,6 +826,80 @@ const SSPC_I2T_RATING_A2S = 2000.0;
 // "zonal protection" — the breaker nearest the fault trips and nothing else.
 const PROTECTION_COORDINATION_MARGIN_S = 0.0001;
 
+// --- Battery terminals and instruments (B01) ---------------------------------
+// Everything above describes what the battery STORES. This section describes
+// what it EXPOSES — a voltage a meter could read — so that state of charge
+// becomes something to infer rather than something to look up.
+//
+// NOTE ON THE UNASSIGNED NAMES BELOW. Several constants here are declared with
+// a type and no value. That is deliberate: a bare annotation binds no module
+// attribute, so `from config import X` raises ImportError until you assign one.
+// A placeholder number would import cleanly and be silently wrong, which is the
+// worse failure by a distance.
+// Open-circuit voltage, per CELL, as a degree-7 least-squares fit of a standard
+// NMC/NCA discharge curve. Coefficients are in the mapped variable
+//     x = 2 * soc - 1
+// so the fit is conditioned on [-1, 1] rather than [0, 1]. ASCENDING order:
+// OCV(x) = c[0] + c[1]x + c[2]x^2 + ... — evaluate with Horner, reversed.
+//
+// Max fit error 6.3 mV per cell, and VERIFIED MONOTONIC on [0.05, 1.0], which
+// is the property the whole estimator rests on: where dOCV/dz <= 0, one voltage
+// means two charges and state of charge stops being observable at all.
+//
+// The same fit against an LFP curve FOLDS BACK at every degree from 5 to 9
+// (dOCV/dz goes negative around z = 0.16-0.38), so the LFP comparison in B04
+// needs a lookup table or a piecewise fit, not this form. Write
+// open_circuit_voltage_v so the curve can be swapped without touching the
+// method body.
+const OCV_POLY_NMC = Object.freeze([3.736277252, 0.282556708, 0.022414644, 0.393657303, 0.331825038, -0.860396242, -0.490196078, 0.784167834]);
+
+// Cells in series. Sets pack voltage: CELLS_SERIES * OCV(soc). The pack has to
+// sit sensibly against USER_BUS_VOLTAGE_V = 120 V — a 32S NMC pack runs about
+// 96 V empty, 118 V nominal and 134 V full, which is why T03's converters exist.
+const CELLS_SERIES = 32;
+
+// Pack ohmic resistance. DO NOT PICK THIS INDEPENDENTLY — it is already in this
+// file wearing different clothes. storage.py spends `delivered / eta` on
+// discharge, so eta is delivered over spent, which at the terminals is exactly
+//     eta = V / OCV = 1 - I*R/OCV      =>      R = OCV * (1 - eta) / I_rated
+// Evaluate at the rated operating point: pack OCV at 50 % SoC, and the rated
+// current BATTERY_MAX_DISCHARGE_POWER_W / USER_BUS_VOLTAGE_V.
+//
+// Cross-check the answer before trusting it: I^2 R should come out at about
+// 5 % of 50 kW, because that is the same loss BATTERY_DISCHARGE_EFFICIENCY
+// already claims. If it does not, one of the two is wrong.
+//
+// The gain from having both: eta is fixed, R is fixed, but I is not — so
+// efficiency becomes current-dependent, as a real pack's is. The flat 0.95 was
+// only ever correct at full load, and the battery spends most of the night
+// nowhere near it.
+const BATTERY_R_INTERNAL_OHM = 0.0143;
+
+// --- the instruments, which are not the pack --------------------------------
+// An estimator earns its place by fusing two flawed measurements. Model the
+// flaws or there is nothing to fuse: with perfect sensors the terminal equation
+// inverts algebraically and no filter is needed.
+// Current-channel noise, 1 sigma, per sample. Zero-mean, so it averages out and
+// costs the coulomb count nothing in the long run.
+const CURRENT_SENSOR_NOISE_A = 0.5;
+
+// Current-channel BIAS — a FIXED offset, not a random draw. This is the term
+// that matters: it integrates straight into a coulomb count and never washes
+// out, so the error grows without bound and has no restoring force. Correcting
+// it is the entire reason the filter exists.
+//
+// Keep it deterministic rather than drawn at construction. This project
+// reproduces exactly (see RANDOM_SEED), a per-instance random bias would make
+// every run's battery subtly different, and B04 wants to SWEEP this value
+// deliberately — which you cannot do to something you randomised.
+const CURRENT_SENSOR_BIAS_A = 2.0;
+
+// Voltage-channel noise, 1 sigma, per sample. Blunt but UNBIASED, which is what
+// lets it anchor the drift above. Its cost in state of charge is this divided
+// by the OCV slope — so the same voltmeter is worth eleven times more on NMC
+// than on LFP.
+const VOLTAGE_SENSOR_NOISE_V = 0.0068;
+
 // Lower number = higher priority = shed last, restored first.
 const LoadPriority = Object.freeze({
   CRITICAL: 0,
@@ -783,6 +907,109 @@ const LoadPriority = Object.freeze({
   MEDIUM: 2,
   LOW: 3,
 });
+
+// ===== ekf.js ======================================================
+// ekf.js — the one-state Extended Kalman Filter, in the browser.
+//
+// A port of estimator/src/ekf.cpp, which is the authority. This exists so the
+// page can show the filter WORKING, tick by tick, rather than showing a chart
+// of a result computed somewhere else: the whole point of the visualisation is
+// that a reader watches an estimate diverge and get pulled back.
+//
+// It is kept honest the same way the rest of web/ is — by conformance testing
+// against golden output generated from the real implementation. A port nobody
+// checks is a second source of truth, and the first time it drifts the page
+// starts lying about what the estimator does.
+//
+//   .venv/bin/python web/tools/export_ekf_golden.py
+//   node web/src/conformance.js
+//
+// THE SIX LINES
+//   predict:  z <- z - eta*I*dt/(3600*Q)
+//             P <- P + Qproc
+//   correct:  H <- dOCV/dz              at the PREDICTED state
+//             K <- P*H / (H*H*P + R)
+//             z <- z + K*(Vmeas - Vpred)
+//             P <- (1 - K*H)*P
+//
+// K is the only interesting quantity: near 0 the filter has stopped believing
+// the voltmeter. A flat OCV curve drives H to zero, which drives K to zero,
+// however good the instrument — chemistry, not tuning.
+
+
+/** Nominal pack volts, the divisor that turns stored Wh into Ah. */
+const V_NOMINAL = 3.7 * CELLS_SERIES;
+const CAPACITY_AH = BATTERY_CAPACITY_WH / V_NOMINAL;
+
+/** Pack open-circuit voltage at a state of charge. */
+function ocvV(soc) {
+  const x = 2.0 * soc - 1.0;
+  let result = 0.0;
+  for (let i = OCV_POLY_NMC.length - 1; i >= 0; i -= 1) {
+    result = result * x + OCV_POLY_NMC[i];
+  }
+  return result * CELLS_SERIES;
+}
+
+/**
+ * The measurement Jacobian: d(pack OCV)/d(state of charge), volts per unit.
+ *
+ * THE CHAIN RULE. The polynomial is in x = 2*soc - 1, so differentiating the
+ * coefficients gives dOCV/dx and still owes a factor of 2. Forget it and every
+ * gain is half what it should be — the filter still runs, still converges,
+ * just slower, which is exactly the kind of wrong that survives a demo.
+ *
+ * The loop stops at i >= 1: the constant term differentiates away, and running
+ * down to 0 does not harmlessly add zero — it costs an extra multiply by x,
+ * shifting every power by one.
+ */
+function docvDsoc(soc) {
+  const x = 2.0 * soc - 1.0;
+  let result = 0.0;
+  for (let i = OCV_POLY_NMC.length - 1; i >= 1; i -= 1) {
+    result = result * x + i * OCV_POLY_NMC[i];
+  }
+  return result * CELLS_SERIES * 2.0;
+}
+
+class Ekf {
+  /**
+   * @param initialSoc the prior — what you believe before any evidence
+   * @param initialVar how strongly. Large means "I am guessing".
+   * @param qProc      process variance per step
+   * @param rMeas      measurement variance. A BELIEF, not a measurement.
+   */
+  constructor(initialSoc, initialVar = 1e-6, qProc = 1e-9,
+              rMeas = VOLTAGE_SENSOR_NOISE_V ** 2) {
+    this.soc = initialSoc;
+    this.variance = initialVar;
+    this.qProc = qProc;
+    this.rMeas = rMeas;
+    this.gain = 0.0;
+  }
+
+  /** One predict/correct cycle. @return the updated estimate. */
+  update(currentA, terminalVoltageV, dtS) {
+    // predict
+    this.soc -= (BATTERY_COULOMBIC_EFFICIENCY * currentA * dtS)
+      / (3600.0 * CAPACITY_AH);
+    this.variance += this.qProc;
+
+    // correct — H at the PREDICTED state, never the old one
+    const h = docvDsoc(this.soc);
+    const predictedV = ocvV(this.soc) - currentA * BATTERY_R_INTERNAL_OHM;
+    const residualV = terminalVoltageV - predictedV;
+
+    this.gain = (this.variance * h) / (h * h * this.variance + this.rMeas);
+    this.soc += this.gain * residualV;
+    this.variance = (1.0 - this.gain * h) * this.variance;
+
+    // Clamp the estimate, never the variance: squeezing a confidence lies to
+    // the filter about how much it knows.
+    this.soc = Math.min(Math.max(this.soc, BATTERY_SOC_MIN), BATTERY_SOC_MAX);
+    return this.soc;
+  }
+}
 
 // ===== environment.js ==============================================
 // environment.js — the lunar day/night cycle. Port of environment.py.
@@ -920,6 +1147,11 @@ class BatteryBank extends PowerStorage {
       name, capacityWh, initialSoc, maxChargePowerW, maxDischargePowerW,
       chargeEfficiency, dischargeEfficiency, socMin, socMax,
     });
+    this.cells = CELLS_SERIES;
+    this.batteryInternalR = BATTERY_R_INTERNAL_OHM;
+    this.currSensorBias = CURRENT_SENSOR_BIAS_A;
+    this.currSensorNoise = CURRENT_SENSOR_NOISE_A;
+    this.voltSensorNoise = VOLTAGE_SENSOR_NOISE_V;
     this.energyWh = initialSoc * capacityWh;
   }
 
@@ -951,6 +1183,36 @@ class BatteryBank extends PowerStorage {
     this.energyWh -= energyOutWh;
     this.clampEnergy();
     return deliveredPowerW;
+  }
+
+  // --- B01: the terminals, and the instruments -----------------------------
+  // Port of BatteryBank.open_circuit_voltage_v / terminal_voltage_v / measure.
+  // Horner over ASCENDING coefficients, which is why the loop runs downward;
+  // evaluating it upward gives a different polynomial that still returns
+  // plausible voltages.
+
+  /** Pack OCV at a state of charge; monotonic by contract. */
+  openCircuitVoltageV(soc) {
+    const x = 2.0 * soc - 1.0;
+    let result = 0.0;
+    for (let i = OCV_POLY_NMC.length - 1; i >= 0; i -= 1) {
+      result = result * x + OCV_POLY_NMC[i];
+    }
+    return result * this.cells;
+  }
+
+  /** What a voltmeter reads under load. Positive current discharges. */
+  terminalVoltageV(currentA) {
+    return this.openCircuitVoltageV(this.stateOfCharge)
+      - currentA * this.batteryInternalR;
+  }
+
+  /** What the instruments report; the bias is the term that drifts. */
+  measure(currentA, rng) {
+    return [
+      currentA + this.currSensorBias + rng.gauss(0, this.currSensorNoise),
+      this.terminalVoltageV(currentA) + rng.gauss(0, this.voltSensorNoise),
+    ];
   }
 
   get deliverableEnergyWh() {
@@ -1674,6 +1936,72 @@ const kW = (w) => (w / 1000).toFixed(2);
 
 let state = { history: [], summary: null, tick: 0, playing: false, raf: null };
 
+/* ---- the estimator ------------------------------------------------------- */
+/* Seeded, so the page shows the same run twice. Math.random would make every
+   reload a different experiment, which is not what a reader comparing two
+   settings wants. */
+function makeRng(seed) {
+  let a = seed >>> 0;
+  const next = () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  return {
+    gauss(mu, sigma) {                          // Box-Muller
+      const u = Math.max(next(), 1e-12), v = next();
+      return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    },
+  };
+}
+
+/**
+ * Replay the battery's trajectory through the filter.
+ *
+ * The estimator OBSERVES here rather than steering: the controller on this
+ * page still acts on truth. That is not a shortcut. The closed-loop experiment
+ * was run in Python and the outpost's behaviour did not change at all, even at
+ * a 100 A bias — the battery holds 7.95 % of the fleet reserve and the
+ * controller's dead band is 15 points wide, so the worst perturbation near the
+ * threshold was 4.4 points and no decision flipped. The histories are
+ * identical, so this shows the filter without misrepresenting it.
+ */
+function runEstimator() {
+  const h = state.history;
+  state.ekf = { truth: [], estimate: [], counted: [], gain: [], error: [] };
+  if (!h.length) return;
+
+  const batt = new BatteryBank();
+  const rng = makeRng(12345);
+  const f = new Ekf(h[0]["soc:Battery Bank"]);
+  let counted = f.soc;
+
+  for (let i = 0; i < h.length; i += 1) {
+    const truth = h[i]["soc:Battery Bank"];
+    const prev = i === 0 ? truth : h[i - 1]["soc:Battery Bank"];
+    const dtH = i === 0 ? 1.0 : h[i].t_hours - h[i - 1].t_hours;
+    /* Pack current from the pack's own energy change, POSITIVE discharging.
+       The converter and feeder sit outside the pack, and no ammeter on the
+       battery would see their losses. */
+    const currentA = dtH > 0
+      ? ((prev - truth) * batt.capacityWh) / (V_NOMINAL * dtH) : 0.0;
+    batt.energyWh = truth * batt.capacityWh;
+    const m = batt.measure(currentA, rng);
+    f.update(m[0], m[1], dtH * 3600.0);
+    /* The same biased reading integrated with no correction at all: the line
+       the filter is beating. */
+    counted -= (m[0] * dtH) / CAPACITY_AH;
+    counted = Math.min(Math.max(counted, 0.0), 1.0);
+
+    state.ekf.truth.push(truth);
+    state.ekf.estimate.push(f.soc);
+    state.ekf.counted.push(counted);
+    state.ekf.gain.push(f.gain);
+    state.ekf.error.push(f.soc - truth);
+  }
+}
+
 /* ---- build and run ------------------------------------------------------- */
 function rebuild() {
   const outage = $("outage").checked ? 500.0 : null;
@@ -1689,6 +2017,7 @@ function rebuild() {
   engine.run();
   state.history = engine.history;
   state.summary = engine.summary();
+  runEstimator();
 
   const feederLoss = engine.history.reduce((s, r) => s + r.feeder_loss_w, 0) / 1000;
   const convLoss = engine.history.reduce((s, r) => s + r.converter_loss_w, 0) / 1000;
@@ -1886,6 +2215,22 @@ function render() {
     ? "NEGATIVE — the bus cannot meet demand"
     : `fleet can still deliver ${kW(r.storage_ceiling_w)} kW`;
 
+  // The estimator, live. The error is what matters, not the estimate: the
+  // filter converts drift that grows without bound into an error that settles.
+  const e = state.ekf;
+  if (e && e.estimate.length) {
+    const est = e.estimate[state.tick];
+    const err = e.error[state.tick] * 100;
+    const drift = (e.counted[state.tick] - e.truth[state.tick]) * 100;
+    $("ekfVal").textContent = est.toFixed(4);
+    $("ekfFill").style.width = (est * 100).toFixed(1) + "%";
+    $("ekfFill").style.background = Math.abs(err) > 5 ? "var(--red)"
+      : Math.abs(err) > 1 ? "var(--orange)" : "var(--blue)";
+    $("ekfNote").textContent =
+      `${err >= 0 ? "+" : ""}${err.toFixed(2)} % off truth — `
+      + `coulomb counting alone is ${drift >= 0 ? "+" : ""}${drift.toFixed(2)} %`;
+  }
+
   const failing = r.shortfall_w > 0;
   const busState = document.getElementById("busState");
   if (busState) {
@@ -2025,6 +2370,36 @@ function drawCharts() {
     + poly(h, (r) => r["soc:Regenerative Fuel Cell"], 0, 1, "var(--green)", 1.4)
     + frame("0.0", "1.0", "") + cursor("soc");
 
+  // --- the estimator -------------------------------------------------------
+  // Series live in state.ekf rather than in the history records: the history
+  // is conformance-tested against Python and must stay byte-identical.
+  const e = state.ekf;
+  const series = (arr, lo, hi, colour, width, dash) => {
+    const pts = arr.map((v, i) =>
+      `${xAt(i, arr.length).toFixed(1)},${yAt(v, lo, hi).toFixed(1)}`);
+    return `<polyline points="${pts.join(" ")}" fill="none" stroke="${colour}"`
+      + ` stroke-width="${width}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
+  };
+
+  $("ch-ekf").innerHTML = night
+    + series(e.counted, 0, 1, "var(--red)", 1.2)
+    + series(e.truth, 0, 1, "var(--ink)", 1.6, "4 3")
+    + series(e.estimate, 0, 1, "var(--blue)", 1.5)
+    + frame("0.0", "1.0", "") + cursor("ekf");
+
+  // Gain and error are scaled to their own ranges and the legend says which is
+  // which. On a shared linear axis one of them renders as a flat line against
+  // the frame, which would hide the very behaviour the chart exists to show.
+  const gMax = Math.max(...e.gain, 1e-9);
+  const eAbs = Math.max(...e.error.map(Math.abs), 1e-4);
+  const zeroE = yAt(0, -eAbs, eAbs).toFixed(1);
+  $("ch-gain").innerHTML = night
+    + `<line class="cgrid" x1="${PAD.l}" y1="${zeroE}" x2="${CW - PAD.r}" y2="${zeroE}"/>`
+    + series(e.error, -eAbs, eAbs, "var(--orange)", 1.3)
+    + series(e.gain, 0, gMax * 1.05, "var(--green)", 1.5)
+    + frame((-eAbs * 100).toFixed(1), (eAbs * 100).toFixed(1), " % err")
+    + cursor("gain");
+
   // --- headroom ------------------------------------------------------------
   const hv = h.map((r) => r.headroom_w / 1000);
   const cv = h.map((r) => r.storage_ceiling_w / 1000);
@@ -2080,7 +2455,7 @@ function drawCharts() {
  *  however many points the charts hold. */
 function moveCursors() {
   const x = xAt(state.tick, state.history.length).toFixed(1);
-  for (const id of ["power", "soc", "head", "shed"]) {
+  for (const id of ["power", "soc", "ekf", "gain", "head", "shed"]) {
     const el = document.getElementById(`cur-${id}`);
     if (el) { el.setAttribute("x1", x); el.setAttribute("x2", x); }
   }

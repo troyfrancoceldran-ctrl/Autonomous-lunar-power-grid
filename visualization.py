@@ -423,11 +423,62 @@ def figure_two_signals(history, path=None):
     return _save(fig, path)
 
 
+def figure_estimator(history, path=None):
+    """Truth against the estimate, and the drift the filter is beating.
+
+    Returns None when the run carried no estimator, so make_all can skip it
+    rather than draw an empty axis.
+    """
+    if not history or "est:soc" not in history[0]:
+        return None
+
+    t = [r["t_hours"] for r in history]
+    truth = [r["est:true_battery_soc"] for r in history]
+    est = [r["est:soc"] for r in history]
+    counted = [r["est:counted"] for r in history]
+    err = [(e - v) * 100.0 for e, v in zip(est, truth)]
+    drift = [(c - v) * 100.0 for c, v in zip(counted, truth)]
+
+    fig, (top, bot) = plt.subplots(
+        2, 1, figsize=(10, 6.4), sharex=True,
+        gridspec_kw={"height_ratios": [1.5, 1.0], "hspace": 0.18})
+    fig.patch.set_facecolor(THEME.surface)
+
+    for ax in (top, bot):
+        _shade_night(ax, history)
+
+    # Truth goes on TOP, dashed. The estimate tracks it so closely that drawing
+    # truth underneath hides it completely — and a reader cannot tell a line
+    # that agrees from a line that was never plotted.
+    top.plot(t, counted, color=THEME.critical, linewidth=1.6,
+             label="coulomb counting alone", zorder=3)
+    top.plot(t, est, color=THEME.series[0], linewidth=2.4,
+             label="EKF estimate", zorder=4)
+    top.plot(t, truth, color=THEME.ink, linewidth=1.4,
+             linestyle=(0, (3, 4)), label="truth (no sensor reads this)",
+             zorder=5)
+    _style(top, "What no instrument can measure",
+           "battery state of charge  [-]", xlabel="", pad=30)
+    _legend(top, 3)
+    top.set_ylim(0, 1.05)
+
+    bot.axhline(0, color=THEME.ink, linewidth=1.0, zorder=2)
+    bot.plot(t, drift, color=THEME.critical, linewidth=1.6,
+             label=f"counting error, reaching {max(drift, key=abs):+.0f} %")
+    bot.plot(t, err, color=THEME.series[0], linewidth=2.0,
+             label=f"EKF error, bounded within {max(err, key=abs):+.2f} %")
+    _style(bot, "", "estimate - truth  [% SoC]", pad=18)
+    _legend(bot, 2)
+    bot.set_xlim(t[0], t[-1])
+    return _save(fig, path)
+
+
 FIGURES = [
     (figure_power_balance, "power_balance"),
     (figure_reserves, "reserves"),
     (figure_shed_timeline, "shed_timeline"),
     (figure_two_signals, "two_signals"),
+    (figure_estimator, "estimator"),
 ]
 
 
@@ -443,6 +494,8 @@ def make_all(history, outdir="data/figures", themes=None):
             for fn, stem in FIGURES:
                 path = os.path.join(outdir, f"{stem}{suffix}.png")
                 fig = fn(history, path)
+                if fig is None:      # the run carried no estimator
+                    continue
                 plt.close(fig)
                 paths.append(path)
     return paths

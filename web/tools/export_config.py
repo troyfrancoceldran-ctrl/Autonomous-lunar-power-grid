@@ -73,6 +73,12 @@ def js_value(value):
         return "true" if value else "false"
     if value is None:
         return "null"
+    if isinstance(value, (tuple, list)):
+        # Frozen, because these are physical constants and a browser console
+        # that can push onto OCV_POLY_NMC is a browser console that can make
+        # the page disagree with the simulation it claims to mirror.
+        return ("Object.freeze([" +
+                ", ".join(js_value(v) for v in value) + "])")
     if isinstance(value, float):
         if value != value or value in (float("inf"), float("-inf")):
             raise ValueError("non-finite constant")
@@ -85,7 +91,9 @@ def main():
     parts = [HEADER]
 
     names = [n for n in dir(cfg)
-            if n.isupper() and isinstance(getattr(cfg, n), (int, float, bool, type(None)))]
+            if n.isupper() and isinstance(getattr(cfg, n),
+                                          (int, float, bool, tuple, list,
+                                           type(None)))]
     # dir() sorts alphabetically; config.py's own order is the readable one.
     order = {}
     for i, line in enumerate(open(os.path.join(ROOT, "config.py"))):

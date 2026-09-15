@@ -28,6 +28,7 @@
 // last. Those produce identical output for hundreds of ticks and then diverge
 // once, which is exactly why the comparison is per-tick and not on summaries.
 
+import { Ekf, ocvV, docvDsoc } from "./ekf.js";
 import { LunarEnvironment } from "./environment.js";
 import { SimulationEngine } from "./engine.js";
 import { buildOutpost } from "./outpost.js";
@@ -166,4 +167,69 @@ export function checkAll(goldens) {
     results.push(result);
   }
   return results;
+}
+
+// ===== the estimator =========================================================
+// web/src/ekf.js is a port of estimator/src/ekf.cpp, and the page shows it
+// running live. Held to a golden trace produced by the REAL filter, because a
+// port nobody checks is a second source of truth that quietly drifts.
+
+/**
+ * Replay the golden inputs through the JS filter and compare every tick.
+ * @param golden web/golden/ekf.json
+ * @return {scenario, ticks, fields, checks, worst, passed, failures, ...}
+ */
+export function checkEkf(golden) {
+  const failures = [];
+  let worst = { relative: 0 };
+  let checks = 0;
+
+  // The curve first. If ocvV or docvDsoc disagree, every tick will too, and
+  // the tick failures would bury the one cause.
+  for (let i = 0; i < golden.curve.length; i += 1) {
+    const [soc, wantOcv, wantSlope] = golden.curve[i];
+    const pairs = [["ocvV", ocvV(soc), wantOcv],
+                   ["docvDsoc", docvDsoc(soc), wantSlope]];
+    for (let j = 0; j < pairs.length; j += 1) {
+      const [field, got, want] = pairs[j];
+      checks += 1;
+      const rel = Math.abs(want) > ABS_FLOOR
+        ? Math.abs(got - want) / Math.abs(want) : Math.abs(got - want);
+      if (rel > worst.relative) worst = { relative: rel, field, soc };
+      if (!agrees(got, want) && failures.length < 12) {
+        failures.push({ tick: `soc=${soc.toFixed(2)}`, field, got, want });
+      }
+    }
+  }
+
+  const init = golden.initial;
+  const f = new Ekf(init.soc, init.variance, init.qProc, init.rMeas);
+  for (let k = 0; k < golden.inputs.length; k += 1) {
+    const [currentA, voltageV, dtS] = golden.inputs[k];
+    f.update(currentA, voltageV, dtS);
+    const [wantSoc, wantVar, wantGain] = golden.ticks[k];
+    const pairs = [["soc", f.soc, wantSoc], ["variance", f.variance, wantVar],
+                   ["gain", f.gain, wantGain]];
+    for (let j = 0; j < pairs.length; j += 1) {
+      const [field, got, want] = pairs[j];
+      checks += 1;
+      const rel = Math.abs(want) > ABS_FLOOR
+        ? Math.abs(got - want) / Math.abs(want) : Math.abs(got - want);
+      if (rel > worst.relative) worst = { relative: rel, field, tick: k };
+      if (!agrees(got, want) && failures.length < 12) {
+        failures.push({ tick: k, field, got, want });
+      }
+    }
+  }
+
+  return {
+    scenario: "ekf",
+    ticks: golden.inputs.length,
+    fields: 3,
+    checks,
+    worst,
+    passed: failures.length === 0,
+    failures,
+    summaryFailures: [],
+  };
 }

@@ -46,6 +46,7 @@ GOLDEN = os.path.join(ROOT, "web", "golden")
 # would be more code than the thing it resolves.
 MODULES = [
     "config.js",
+    "ekf.js",
     "environment.js",
     "assets/base.js",
     "assets/generation.js",
@@ -104,6 +105,7 @@ def build_bundle(modules=None):
 RUNNER = r"""
 // ===== headless runner =======================================================
 var results = checkAll(GOLDENS);
+results.push(checkEkf(EKF_GOLDEN));
 var allPassed = true;
 console.log("");
 console.log("  scenario     ticks  fields     checks   worst rel   result");
@@ -148,6 +150,10 @@ def main():
 
     bundle = build_bundle()
     bundle += "\nvar GOLDENS = " + json.dumps(goldens, separators=(",", ":")) + ";\n"
+    with open(os.path.join(GOLDEN, "ekf.json"), encoding="utf-8") as handle:
+        bundle += ("\nvar EKF_GOLDEN = "
+                   + json.dumps(json.load(handle), separators=(",", ":"))
+                   + ";\n")
     bundle += RUNNER
 
     scratch = os.environ.get("TMPDIR", tempfile.gettempdir())

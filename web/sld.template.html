@@ -275,6 +275,14 @@ noon at full moon, so this disc reads the outpost's own clock.</title>
         <div class="fill" id="hrFill" style="width:50%"></div>
       </div>
     </div>
+    <div class="sig">
+      <h2>Estimator — battery charge</h2>
+      <div class="val" id="ekfVal">0.9500</div>
+      <div class="note" id="ekfNote">inferred from voltage; no sensor reads this</div>
+      <div class="track">
+        <div class="fill" id="ekfFill" style="width:95%"></div>
+      </div>
+    </div>
   </section>
 
   <figure>
@@ -348,6 +356,33 @@ noon at full moon, so this disc reads the outpost's own clock.</title>
         <span><i style="background:var(--blue)"></i>Fleet</span>
         <span><i style="background:var(--orange)"></i>Battery</span>
         <span><i style="background:var(--green)"></i>Fuel cell</span>
+      </div>
+    </figure>
+
+    <figure class="chart">
+      <h3>What no instrument can measure</h3>
+      <p>There is no state-of-charge sensor. The dashed line is the truth the
+         simulation knows; the solid line is what an EKF infers from terminal
+         voltage and a current sensor biased by 2&#8239;A.</p>
+      <svg id="ch-ekf" viewBox="0 0 480 150" role="img"
+           aria-label="True battery state of charge against the filter's estimate."></svg>
+      <div class="legend">
+        <span><i style="background:var(--ink)"></i>truth</span>
+        <span><i style="background:var(--blue)"></i>EKF estimate</span>
+        <span><i style="background:var(--red)"></i>coulomb counting alone</span>
+      </div>
+    </figure>
+
+    <figure class="chart">
+      <h3>Kalman gain — how much it believes the voltmeter</h3>
+      <p>Near zero the filter has stopped listening and is coasting on its own
+         arithmetic. The gain follows the OCV slope, so it collapses wherever
+         the curve flattens — chemistry, not tuning.</p>
+      <svg id="ch-gain" viewBox="0 0 480 150" role="img"
+           aria-label="Kalman gain and estimate error across the run."></svg>
+      <div class="legend">
+        <span><i style="background:var(--green)"></i>gain K</span>
+        <span><i style="background:var(--orange)"></i>estimate &minus; truth</span>
       </div>
     </figure>
 
@@ -541,6 +576,72 @@ const kW = (w) => (w / 1000).toFixed(2);
 
 let state = { history: [], summary: null, tick: 0, playing: false, raf: null };
 
+/* ---- the estimator ------------------------------------------------------- */
+/* Seeded, so the page shows the same run twice. Math.random would make every
+   reload a different experiment, which is not what a reader comparing two
+   settings wants. */
+function makeRng(seed) {
+  let a = seed >>> 0;
+  const next = () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  return {
+    gauss(mu, sigma) {                          // Box-Muller
+      const u = Math.max(next(), 1e-12), v = next();
+      return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    },
+  };
+}
+
+/**
+ * Replay the battery's trajectory through the filter.
+ *
+ * The estimator OBSERVES here rather than steering: the controller on this
+ * page still acts on truth. That is not a shortcut. The closed-loop experiment
+ * was run in Python and the outpost's behaviour did not change at all, even at
+ * a 100 A bias — the battery holds 7.95 % of the fleet reserve and the
+ * controller's dead band is 15 points wide, so the worst perturbation near the
+ * threshold was 4.4 points and no decision flipped. The histories are
+ * identical, so this shows the filter without misrepresenting it.
+ */
+function runEstimator() {
+  const h = state.history;
+  state.ekf = { truth: [], estimate: [], counted: [], gain: [], error: [] };
+  if (!h.length) return;
+
+  const batt = new BatteryBank();
+  const rng = makeRng(12345);
+  const f = new Ekf(h[0]["soc:Battery Bank"]);
+  let counted = f.soc;
+
+  for (let i = 0; i < h.length; i += 1) {
+    const truth = h[i]["soc:Battery Bank"];
+    const prev = i === 0 ? truth : h[i - 1]["soc:Battery Bank"];
+    const dtH = i === 0 ? 1.0 : h[i].t_hours - h[i - 1].t_hours;
+    /* Pack current from the pack's own energy change, POSITIVE discharging.
+       The converter and feeder sit outside the pack, and no ammeter on the
+       battery would see their losses. */
+    const currentA = dtH > 0
+      ? ((prev - truth) * batt.capacityWh) / (V_NOMINAL * dtH) : 0.0;
+    batt.energyWh = truth * batt.capacityWh;
+    const m = batt.measure(currentA, rng);
+    f.update(m[0], m[1], dtH * 3600.0);
+    /* The same biased reading integrated with no correction at all: the line
+       the filter is beating. */
+    counted -= (m[0] * dtH) / CAPACITY_AH;
+    counted = Math.min(Math.max(counted, 0.0), 1.0);
+
+    state.ekf.truth.push(truth);
+    state.ekf.estimate.push(f.soc);
+    state.ekf.counted.push(counted);
+    state.ekf.gain.push(f.gain);
+    state.ekf.error.push(f.soc - truth);
+  }
+}
+
 /* ---- build and run ------------------------------------------------------- */
 function rebuild() {
   const outage = $("outage").checked ? 500.0 : null;
@@ -556,6 +657,7 @@ function rebuild() {
   engine.run();
   state.history = engine.history;
   state.summary = engine.summary();
+  runEstimator();
 
   const feederLoss = engine.history.reduce((s, r) => s + r.feeder_loss_w, 0) / 1000;
   const convLoss = engine.history.reduce((s, r) => s + r.converter_loss_w, 0) / 1000;
@@ -753,6 +855,22 @@ function render() {
     ? "NEGATIVE — the bus cannot meet demand"
     : `fleet can still deliver ${kW(r.storage_ceiling_w)} kW`;
 
+  // The estimator, live. The error is what matters, not the estimate: the
+  // filter converts drift that grows without bound into an error that settles.
+  const e = state.ekf;
+  if (e && e.estimate.length) {
+    const est = e.estimate[state.tick];
+    const err = e.error[state.tick] * 100;
+    const drift = (e.counted[state.tick] - e.truth[state.tick]) * 100;
+    $("ekfVal").textContent = est.toFixed(4);
+    $("ekfFill").style.width = (est * 100).toFixed(1) + "%";
+    $("ekfFill").style.background = Math.abs(err) > 5 ? "var(--red)"
+      : Math.abs(err) > 1 ? "var(--orange)" : "var(--blue)";
+    $("ekfNote").textContent =
+      `${err >= 0 ? "+" : ""}${err.toFixed(2)} % off truth — `
+      + `coulomb counting alone is ${drift >= 0 ? "+" : ""}${drift.toFixed(2)} %`;
+  }
+
   const failing = r.shortfall_w > 0;
   const busState = document.getElementById("busState");
   if (busState) {
@@ -892,6 +1010,36 @@ function drawCharts() {
     + poly(h, (r) => r["soc:Regenerative Fuel Cell"], 0, 1, "var(--green)", 1.4)
     + frame("0.0", "1.0", "") + cursor("soc");
 
+  // --- the estimator -------------------------------------------------------
+  // Series live in state.ekf rather than in the history records: the history
+  // is conformance-tested against Python and must stay byte-identical.
+  const e = state.ekf;
+  const series = (arr, lo, hi, colour, width, dash) => {
+    const pts = arr.map((v, i) =>
+      `${xAt(i, arr.length).toFixed(1)},${yAt(v, lo, hi).toFixed(1)}`);
+    return `<polyline points="${pts.join(" ")}" fill="none" stroke="${colour}"`
+      + ` stroke-width="${width}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
+  };
+
+  $("ch-ekf").innerHTML = night
+    + series(e.counted, 0, 1, "var(--red)", 1.2)
+    + series(e.truth, 0, 1, "var(--ink)", 1.6, "4 3")
+    + series(e.estimate, 0, 1, "var(--blue)", 1.5)
+    + frame("0.0", "1.0", "") + cursor("ekf");
+
+  // Gain and error are scaled to their own ranges and the legend says which is
+  // which. On a shared linear axis one of them renders as a flat line against
+  // the frame, which would hide the very behaviour the chart exists to show.
+  const gMax = Math.max(...e.gain, 1e-9);
+  const eAbs = Math.max(...e.error.map(Math.abs), 1e-4);
+  const zeroE = yAt(0, -eAbs, eAbs).toFixed(1);
+  $("ch-gain").innerHTML = night
+    + `<line class="cgrid" x1="${PAD.l}" y1="${zeroE}" x2="${CW - PAD.r}" y2="${zeroE}"/>`
+    + series(e.error, -eAbs, eAbs, "var(--orange)", 1.3)
+    + series(e.gain, 0, gMax * 1.05, "var(--green)", 1.5)
+    + frame((-eAbs * 100).toFixed(1), (eAbs * 100).toFixed(1), " % err")
+    + cursor("gain");
+
   // --- headroom ------------------------------------------------------------
   const hv = h.map((r) => r.headroom_w / 1000);
   const cv = h.map((r) => r.storage_ceiling_w / 1000);
@@ -947,7 +1095,7 @@ function drawCharts() {
  *  however many points the charts hold. */
 function moveCursors() {
   const x = xAt(state.tick, state.history.length).toFixed(1);
-  for (const id of ["power", "soc", "head", "shed"]) {
+  for (const id of ["power", "soc", "ekf", "gain", "head", "shed"]) {
     const el = document.getElementById(`cur-${id}`);
     if (el) { el.setAttribute("x1", x); el.setAttribute("x2", x); }
   }
