@@ -29,3 +29,7 @@ docs/_*preview_*.png
 
 # CMake build tree for the estimator — a build artifact, not source.
 estimator/build/
+
+# PlatformIO build tree — a build artifact, like estimator/build.
+firmware/.pio/
+firmware/build/

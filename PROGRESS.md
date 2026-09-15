@@ -125,10 +125,29 @@ number we can state.
       was right on the first attempt at each function, and every correction
       after that was syntax. `estimator/CPP_NOTES.md` records the subset and
       the traps.
-- [ ] **B03** The HIL bridge: controller on the ESP32, physics on the host,
-      serial between them. This is what "hardware" should mean here — the
-      controller was written numpy-free at Step 7 precisely so it could port
-      to an MCU. (Claude — plumbing)
+- [x] **B03** The HIL bridge — DONE 2026-09-15. Controller on an ESP32,
+      physics on the host, serial between them. **HIL CONFORMANCE PASS**:
+      1440 ticks, every field of every tick identical to the software run,
+      repeated three times. 12.8 ms per tick.
+      The controller was written numpy-free at Step 7 precisely so it could
+      port to an MCU; this is that decision being cashed in.
+      `firmware/src/controller.cpp` includes no Arduino.h and no vendor SDK,
+      so it also builds natively and is held to a 1440-tick golden trace of
+      the PYTHON controller's decisions — captured by wrapping
+      `controller.update` inside the running simulation, not by reconstructing
+      its inputs, which would be a second implementation of the thing under
+      test. All 1440 match, including the 1429 where the answer was "do
+      nothing".
+      Board: ESP32-D0WD-V3 rev 3.1, 22.6 kB RAM (6.9 %), 275 kB flash (21 %).
+      Three defects found and fixed on the way, all environmental rather than
+      logical: the ESP32 Arduino core compiles as gnu++11 where a struct with
+      default member initialisers is not an aggregate (forced to C++17 so the
+      firmware and the native test share one standard); opening the port
+      toggles DTR/RTS, which on a CP2102 resets the board into its ROM
+      bootloader at 74880 baud and produces endless plausible garbage; and a
+      strict request/response protocol must drain stale input BEFORE sending,
+      or every exchange lags by one and the symptom is a perfectly valid
+      answer to the previous question.
 - [x] **B04** Truth vs estimate — MEASURED 2026-09-15, and the answer is not
       the one that was predicted. (together)
       The controller's only view of stored energy is one float at
