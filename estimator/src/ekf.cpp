@@ -51,6 +51,7 @@ double Ekf::update(double current_a, double terminal_voltage_v, double dt_s) {
     // }
     // return result * static_cast<double>(params::CELLS_SERIES) * 2;
 
+    
     throw std::logic_error("B02: Ekf::update not implemented");
 }
 

@@ -7,6 +7,16 @@ Not a C++ tutorial. This is the *specific* subset needed to write
 `docv_dsoc` and `Ekf::update`, and the traps that will actually fire while
 you do. Everything else about the language can wait.
 
+**Read the section for the task in front of you, not the whole document.**
+It is written to be picked up mid-flight:
+
+| you are writing | read |
+|---|---|
+| `docv_dsoc` (B02 fn 1) | everything down to *What you can safely ignore* |
+| `Ekf::update` (B02 fn 2) | *Function 2* |
+| reading the HIL bridge (B03) | *What changes on hardware* |
+| the measurement table (B04) | nothing — that is Python |
+
 ---
 
 ## Start here: a translation of your own code
@@ -220,6 +230,128 @@ If you change `config.py`, regenerate the header rather than editing it:
 ```bash
 .venv/bin/python estimator/tools/export_params.py
 ```
+
+---
+
+# Function 2: `Ekf::update`
+
+Everything above still applies. Four things are new, and the first is the
+only one that can cost you an afternoon.
+
+## Members: assign them, never re-declare them
+
+In Python you write `self.soc = ...`. In C++ the members already exist and
+are already in scope. You simply assign:
+
+```cpp
+soc_ = soc_ - ...;      // assigns the member. Correct.
+```
+
+The trap:
+
+```cpp
+double soc_ = soc_ - ...;   // WRONG — creates a brand-new local variable
+```
+
+That `double` declares a *different* variable that merely shares the name.
+It lives until the closing brace and then vanishes. The member is never
+touched, `update()` returns a plausible number, and the filter silently
+never learns anything.
+
+**The build catches this one.** `-Wshadow` fires and `-Werror` makes it
+fatal:
+
+```
+warning: declaration shadows a field of 'lunar::Ekf' [-Wshadow]
+    double soc_ = 0.5;
+           ^
+```
+
+Rule of thumb: write `double` only when introducing a **new** temporary.
+Never in front of `soc_`, `variance_` or `gain_`.
+
+## Name your intermediates
+
+Six lines of algebra compressed into one expression is unreadable and
+impossible to debug. Temporaries are free — the compiler eliminates them:
+
+```cpp
+const double h = docv_dsoc(soc_);
+const double v_pred = params::ocv_v(soc_) - current_a * params::R_INTERNAL_OHM;
+```
+
+`const` on each says "this is computed once and never changes", which is
+true of every intermediate in the six lines.
+
+## `std::clamp` needs a header
+
+```cpp
+#include <algorithm>        // at the top of the file, beside <stdexcept>
+
+soc_ = std::clamp(soc_, params::SOC_MIN, params::SOC_MAX);
+```
+
+Clamp `soc_` at the END, after the correction. Never clamp `variance_`: it
+is a variance, and squeezing it lies to the filter about its own confidence.
+
+## There is no simultaneous assignment
+
+Python lets you write `a, b = b, a` and swap in one line. C++ evaluates
+statements strictly top to bottom, so **if you overwrite a value you still
+need, save it first**:
+
+```cpp
+const double soc_prior = soc_;   // keep it before soc_ changes
+```
+
+This is why trap 1 in `ekf.hpp` matters: `H` must be computed **after** the
+predict step, because it has to be the slope at the *predicted* state. Move
+that line above the predict and you have linearised about the old estimate —
+a different filter, and a worse one. The compiler cannot help here; order is
+a matter of meaning, not syntax.
+
+## Housekeeping
+
+Delete the `(void)` casts as the values become genuinely used —
+`(void)current_a;`, `(void)q_proc_;` and the rest. They exist only to
+silence unused-parameter warnings in a stub. Leaving one behind is harmless,
+but it reads as scaffolding nobody cleared.
+
+---
+
+# B03: what changes on hardware
+
+B03 is mine to write, but you will read it, and the shift is worth knowing
+in advance. None of it affects how you write the filter now — the filter is
+deliberately plain C++ so that it does not have to change.
+
+| on the host (now) | on the ESP32 (B03) |
+|---|---|
+| `double` throughout | `float` is likely. The ESP32's FPU is single-precision; doubles are emulated in software and markedly slower |
+| `throw std::logic_error` | exceptions are off by default in ESP-IDF builds — errors become return codes |
+| `int` | fixed-width `int32_t` / `uint8_t` from `<cstdint>`, because plain `int` has no guaranteed size across platforms |
+| `main()` | `setup()` and `loop()` |
+| test harness prints | bytes over a serial link, framed |
+
+The one that reaches back into your code is **float vs double**. If the
+filter moves to single precision, the variance `P` is the number to watch —
+it can grow or shrink across many orders of magnitude, and single precision
+has roughly 7 decimal digits to spend. Something to measure at B03, not to
+pre-emptively design around.
+
+Everything else stays: no dynamic allocation, no vendor headers, no STL
+beyond `std::clamp`. That was the point of writing it this way.
+
+---
+
+# B04: back to Python
+
+B04 is the measurement — truth versus estimate across the scenarios, and the
+deliverable is a table. That runs in the simulation, in Python, on ground you
+already know. No new syntax.
+
+The only C++ you will touch is exporting profiles for the tests to read, and
+that is `tools/` plumbing.
 
 ---
 
