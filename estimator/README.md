@@ -31,15 +31,35 @@ if the estimator lags during a fast discharge, the power-limited hours should ge
 
 ---
 
-## Toolchain, measured 2026-09-14
+## Toolchain, re-measured 2026-09-15 — **B03 is unblocked**
 
 | | |
 |---|---|
 | `clang++` | ✅ Apple clang 21.0.0 |
 | `g++`, `make`, `cmake` | ✅ present |
-| PlatformIO / ESP-IDF / arduino-cli | ❌ none installed |
-| ESP32 board attached | ❌ none (`/dev/cu.debug-console` is macOS's own) |
-| `pyserial` | ❌ not installed |
+| PlatformIO | ✅ 6.2.0, in the project venv (`.venv/bin/pio`) |
+| ESP32 board | ✅ **ESP32-D0WD-V3 rev 3.1**, 4 MB flash |
+| serial bridge | ✅ CP2102, `/dev/cu.usbserial-0001` |
+| `pyserial` | ✅ 3.5 |
+| `esptool` | ✅ in the venv |
+
+Board ID for `platformio.ini` is **`esp32dev`** — it matches the attached part
+exactly on MCU, clock, flash and RAM. PlatformIO is installed into the venv
+rather than system-wide, for the same reason the venv itself lives outside
+iCloud Drive: this project has already lost eleven minutes a test run to an
+environment nobody was watching.
+
+The Xtensa compiler itself is not downloaded until the first build, so the
+install above is small; expect the first `pio run` to fetch a few hundred MB
+into `~/.platformio`.
+
+**One measured fact that reaches back into the code.** The LX6 core has a
+SINGLE-precision FPU. `double` is emulated in software and markedly slower,
+which is exactly what CPP_NOTES.md warned about from general knowledge and is
+now confirmed against this silicon. The filter is `double` throughout, so B03
+must either accept the cost or measure what single precision does to the
+variance `P` — which moves across orders of magnitude and has roughly seven
+decimal digits to spend in `float`.
 
 **This sets the order of work, and the order is the right one anyway.**
 

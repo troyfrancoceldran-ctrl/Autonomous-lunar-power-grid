@@ -327,7 +327,7 @@ deliberately plain C++ so that it does not have to change.
 
 | on the host (now) | on the ESP32 (B03) |
 |---|---|
-| `double` throughout | `float` is likely. The ESP32's FPU is single-precision; doubles are emulated in software and markedly slower |
+| `double` throughout | `float` is likely. CONFIRMED on the attached part: ESP32-D0WD-V3, whose LX6 core has a single-precision FPU, so `double` is emulated in software and markedly slower |
 | `throw std::logic_error` | exceptions are off by default in ESP-IDF builds — errors become return codes |
 | `int` | fixed-width `int32_t` / `uint8_t` from `<cstdint>`, because plain `int` has no guaranteed size across platforms |
 | `main()` | `setup()` and `loop()` |

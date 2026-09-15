@@ -3,3 +3,14 @@ pandas>=2.2
 matplotlib>=3.8
 pytest>=8.0
 pyyaml>=6.0
+
+# --- B03, the hardware-in-the-loop bridge -------------------------------------
+# Kept in the project venv rather than installed system-wide, for the same
+# reason the venv itself lives outside iCloud Drive: this project has already
+# lost eleven minutes a test run to an environment nobody was watching.
+#
+# None of these are needed to run the simulation, the estimator tests or the
+# web conformance suite. They are needed only to talk to a board.
+platformio>=6.1        # toolchain manager; fetches the Xtensa compiler on first build
+esptool>=4.7           # chip identification and flashing
+pyserial>=3.5          # the host side of the serial link (also a platformio dep)

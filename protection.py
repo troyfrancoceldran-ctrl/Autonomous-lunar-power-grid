@@ -425,8 +425,8 @@ def is_pv_able_to_trip(feeder, temperature_k: float) -> bool:
 # =============================================================================
 
 def total_fault_current_a(feeder, temperature_k: float,
-                          sources=("battery", "pv", "converter"),
-                          soc: float = 1.0) -> float:
+                        sources=("battery", "pv", "converter"),
+                        soc: float = 1.0) -> float:
     """Every connected source's contribution into one bolted fault, summed.
 
     A fault is fed by everything still energised, not by the nearest source.
@@ -437,7 +437,7 @@ def total_fault_current_a(feeder, temperature_k: float,
         the worst case and therefore the one protection is sized on.
     """
     return sum(source_fault_contribution_a(kind, feeder, temperature_k, soc)
-               for kind in sources)
+            for kind in sources)
 
 
 def build_protection(buses) -> dict:
