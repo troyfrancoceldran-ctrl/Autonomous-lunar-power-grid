@@ -9,12 +9,23 @@ It runs 60 days — just over two full lunar cycles — and answers one question
 that a single number cannot: **when this outpost fails, does it fail because it
 ran out of energy, or because it ran out of power?**
 
-### → [Open the live site](https://troyfrancoceldran-ctrl.github.io/Autonomous-lunar-power-grid/)
+It then asks a harder one. That controller reads state of charge as
+`stored energy ÷ capacity` — exact, noiseless, free. **No real battery can tell
+you that.** So an Extended Kalman Filter in C++ estimates the charge from
+terminal voltage instead, and the model measures what the outpost loses when
+its controller acts on an inference rather than on truth. The answer was not
+the one predicted — see [Two projects, merged](#two-projects-merged).
+
+The controller itself runs on an **ESP32**, with the physics on the host and
+the decisions on the board: 1440 ticks, every one identical to the software
+run.
+
+### → [Open the live site](https://troyfrancoceldran-ctrl.github.io/Autonomous-lunar-power-grid-simulation/)
 
 | | |
 |---|---|
-| **[One-line diagram](https://troyfrancoceldran-ctrl.github.io/Autonomous-lunar-power-grid/web/sld.html)** | The whole simulation running in the page. Scrub the clock, trigger a reactor outage, switch the conductors and converters on and off, resize the array — the diagram answers. |
-| **[Conformance check](https://troyfrancoceldran-ctrl.github.io/Autonomous-lunar-power-grid/web/conformance.html)** | The browser model against the Python model, 198,720 comparisons. Don't take the port on trust — run it. |
+| **[One-line diagram](https://troyfrancoceldran-ctrl.github.io/Autonomous-lunar-power-grid-simulation/web/sld.html)** | The whole simulation running in the page. Scrub the clock, trigger a reactor outage, switch the conductors and converters on and off, resize the array — the diagram answers. |
+| **[Conformance check](https://troyfrancoceldran-ctrl.github.io/Autonomous-lunar-power-grid-simulation/web/conformance.html)** | The browser model against the Python model, 198,720 comparisons. Don't take the port on trust — run it. |
 
 ---
 
@@ -124,8 +135,8 @@ five things, in this order:
 Two details in that order matter more than they look.
 
 **The controller runs before dispatch, on signals measured at the start of the
-tick.** That is what a real sampled control loop does — and what the
-microcontroller this is eventually meant to run on would do. Letting the
+tick.** That is what a real sampled control loop does — and what the ESP32
+it now actually runs on does. Letting the
 controller see the result of the dispatch it is deciding about would be a
 forecast of its own interval, which IEEE 2030.7 excludes from core control
 functions.
@@ -239,15 +250,33 @@ the binding constraint.
 
 Stated rather than left to be discovered:
 
-- **No thermal model.** Radiator sizing, regolith conductivity and the cold
-  soak on hardware through the night are all out of scope.
-- **No degradation.** Cells do not fade, catalysts do not poison, and the dust
-  derate is a fixed factor standing in for a process that genuinely worsens
-  over mission life.
-- **No electrical topology.** This is a power balance, not a load flow: no bus
-  voltage, no currents, no converter efficiencies distinct from device
-  efficiencies. A single-line diagram would document intended architecture, not
-  something the model computes.
+- **Still a power balance, not a load flow.** There *is* now an electrical
+  topology — a 120 VDC user bus, a 1000 V link to the reactor, per-feeder
+  currents, conductors sized to a loss budget, converter efficiencies distinct
+  from device efficiencies, and a protection scheme with fault currents and
+  coordination. What there is **not** is a nodal power-flow solution. Losses
+  are computed per feeder from the power crossing it; bus voltage is held at
+  nominal rather than solved for, so nothing sags under load.
+- **No transients, and no AC.** Everything is DC and quasi-static at a
+  one-hour timestep. No inrush, no stability, no ripple, no cable inductance
+  or capacitance. The protection maths reasons about fault *magnitudes* and
+  trip *times*, not about what the arc does in between.
+- **Busbar impedance is declared, not modelled.** A short, heavy busbar is
+  sub-milliohm against ~20 mΩ of feeder — under 1 % of a fault current, for a
+  whole model layer.
+- **Thermal modelling stops at the conductors.** Cable resistance does move
+  with temperature, and the lunar swing is severe enough to change it by
+  **6.28×** between a 400 K day and a 100 K night. Nothing else is thermal:
+  no radiator sizing, no regolith conductivity, no cold soak on hardware, and
+  — importantly for the estimator — the battery's internal resistance is held
+  constant when a real one is strongly temperature dependent.
+- **No degradation.** Cells do not fade, catalysts do not poison, internal
+  resistance does not grow, and the dust derate is a fixed factor standing in
+  for a process that genuinely worsens over mission life.
+- **Only the battery is estimated.** The regenerative fuel cell has no OCV
+  curve and no terminals in this model, so the controller reads its charge as
+  ground truth. Since the RFC holds 92 % of the fleet reserve, this is why
+  B04's result is reported as a lower bound rather than a measurement.
 - **Equatorial site assumed** by default. `PV_SUN_TRACKING` selects the polar /
   Vertical Solar Array regime instead, where the sun stays near the horizon and
   a square wave is closer to correct than a sine.
@@ -507,7 +536,8 @@ It exists because an operable single-line diagram needs the model client-side.
 
 It was cheap because the core is **906 lines** and imports nothing outside the
 Python standard library — a consequence of writing the controller as plain
-arithmetic in Step 7 so it could one day run on a microcontroller.
+arithmetic in Step 7 so it could one day run on a microcontroller. It now
+does: see [B03](firmware/README.md).
 
 The port is not trusted because it reads correctly. It is trusted because it
 reproduces the Python model tick for tick:

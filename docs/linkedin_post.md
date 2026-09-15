@@ -101,9 +101,9 @@ negative result, the short one leads with the hardware.
 
 ## First comment (either variant)
 
-> Repo: https://github.com/troyfrancoceldran-ctrl/Autonomous-lunar-power-grid
+> Repo: https://github.com/troyfrancoceldran-ctrl/Autonomous-lunar-power-grid-simulation
 > Live one-line diagram (runs the whole simulation in your browser):
-> https://troyfrancoceldran-ctrl.github.io/Autonomous-lunar-power-grid/web/sld.html
+> https://troyfrancoceldran-ctrl.github.io/Autonomous-lunar-power-grid-simulation/web/sld.html
 >
 > Constants are sourced from NASA and IEEE literature, and the simplifications
 > are declared rather than hidden — there's a section in the README for exactly
