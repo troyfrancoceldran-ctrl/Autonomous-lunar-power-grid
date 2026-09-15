@@ -226,6 +226,13 @@ feeder_rated_current_a(feeder, loss_fraction=MAX_FEEDER_LOSS_FRACTION) -> float
     The continuous current a conductor was sized to carry, by inverting the
     T01 sizing rule. Plumbing.
 
+source_fault_contribution_a(source_kind, feeder, temperature_k, soc=1.0) -> float
+    What ONE source can actually push into a bolted fault.              <- T05
+
+is_pv_able_to_trip(feeder, temperature_k) -> bool
+    Whether a PV array alone can reach its own device's trip threshold. <- T05
+
+
 build_protection(buses) -> dict[str, ProtectionDevice]
     A device per feeder, rated from the feeder's own conductor. Plumbing.
 
@@ -238,6 +245,94 @@ fault_survey(buses, temperature_k=CABLE_TEMP_NIGHT_K) -> dict[str, float]
 """
 
 import dataclasses
+
+# =============================================================================
+# T05 — WHAT ACTUALLY LIMITS A FAULT                      START EDITING HERE
+# =============================================================================
+# prospective_fault_current_a above treats the source as ideal: I = V/R_cable.
+# Its own @note already calls that an upper bound. T05 replaces the hand-wave
+# with the three limits that are really in play, because the gap is not small:
+#
+#   battery feeder, 5838 A ideal
+#     -> 3581 A once the battery's 14.3 m ohm internal resistance is included
+#        (0.7x the cable's own 20.6 m ohm — not a rounding term)
+#     -> 833 A for a converter-fed source held to 2x rating
+#
+# Impedance is the 39 % correction. CONTROL is the 7x correction. A model that
+# added impedance everywhere and ignored current limiting would be more
+# detailed and less true, which is the failure worth avoiding here.
+#
+# -----------------------------------------------------------------------------
+# 1.  source_fault_contribution_a(source_kind, feeder, temperature_k, soc=1.0)
+# -----------------------------------------------------------------------------
+# Return the current ONE source can drive into a bolted fault at the far end of
+# `feeder`. Three cases, and each is limited by something different:
+#
+#   "battery"    IMPEDANCE-limited.
+#                    I = OCV(soc) / (R_internal + R_cable(T))
+#                A fault sees OPEN-CIRCUIT voltage — the load is gone — so use
+#                OCV(soc), evaluated from OCV_POLY_NMC, NOT USER_BUS_VOLTAGE_V
+#                and NOT the loaded terminal voltage. At soc = 1.0 the curve
+#                gives 134.4 V, which is 4.20 V/cell.
+#
+#                TRAP — the two resistances are IN SERIES and both matter. Drop
+#                either and the answer is wrong by tens of percent.
+#
+#   "pv"         PHYSICS-limited.
+#                    I = I_sc = PV_SHORT_CIRCUIT_RATIO * I_rated
+#                A photovoltaic cell is a current source once off its knee:
+#                short it and you get Isc, full stop. Impedance does not enter,
+#                and neither does cable resistance — the cell cannot supply
+#                more however low the circuit resistance goes.
+#
+#                TRAP — do NOT divide by resistance here. The instinct from the
+#                battery case is exactly wrong.
+#
+#   "converter"  CONTROL-limited.
+#                    I = CONVERTER_FAULT_CURRENT_MULTIPLE * I_rated
+#                A converter regulates current and refuses to exceed its limit.
+#                Also independent of cable resistance.
+#
+# `I_rated` in both limited cases is the feeder's continuous rating —
+# feeder_rated_current_a(feeder) already computes it.
+#
+# @param source_kind  one of "battery", "pv", "converter"
+# @param soc          only consulted for "battery"; ignored otherwise
+# @return             amps, always positive
+# @raises ValueError  on an unknown source_kind. Returning 0.0 for a typo
+#     would silently under-report a fault, and under-reporting a fault is how
+#     protection gets under-sized.
+#
+# -----------------------------------------------------------------------------
+# 2.  is_pv_able_to_trip(feeder, temperature_k)
+# -----------------------------------------------------------------------------
+# True when the PV array alone reaches the instantaneous threshold of a device
+# sized on that feeder's rating.
+#
+#     threshold = SSPC_INSTANTANEOUS_TRIP_MULTIPLE * feeder_rated_current_a(f)
+#
+# Expect FALSE, and expect it to be the interesting result. Isc is 1.15x rated
+# against a 10x threshold, so a PV array cannot trip its own protection on
+# short-circuit current — it just sits there delivering Isc into the fault
+# indefinitely. That is a real and well-known property of PV systems, it is why
+# PV needs different protection philosophy from a battery, and it is the kind
+# of finding this project exists to surface.
+#
+# temperature_k is accepted for signature symmetry and is genuinely unused —
+# say so in the docstring rather than leaving a reader to wonder.
+#
+# -----------------------------------------------------------------------------
+# WHAT I WILL DO ONCE THESE ARE WRITTEN
+# -----------------------------------------------------------------------------
+# Tests from this spec, a total_fault_current_a() that sums the contributions
+# actually connected to a bus, and a re-run of the protection findings — the
+# current fault-to-rating ratios are computed from the ideal-source figure and
+# will move.
+#
+# NOT modelled, declared instead: busbar impedance. Sub-milliohm against 20 m
+# ohm of feeder, so under 1 % of the answer for a whole model layer.
+# =============================================================================
+
 import math as mt
 
 from config import (CABLE_TEMP_NIGHT_K, CONDUCTOR_RESISTIVITY_OHM_M,

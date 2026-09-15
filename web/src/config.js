@@ -284,6 +284,54 @@ export const SSPC_I2T_RATING_A2S = 2000.0;
 // "zonal protection" — the breaker nearest the fault trips and nothing else.
 export const PROTECTION_COORDINATION_MARGIN_S = 0.0001;
 
+// --- What actually limits a fault (T05) --------------------------------------
+// prospective_fault_current_a treats the source as IDEAL: I = V / R_cable. Its
+// own docstring already calls that an upper bound, and the gap is large. On the
+// battery feeder, ideal gives 5838 A; the battery's own 14.3 m ohm internal
+// resistance — 0.7x the cable's 20.6 m ohm, so not remotely negligible — brings
+// it to 3581 A, a 38.7 % reduction.
+//
+// But impedance is the SMALL correction. What dominates a converter-fed DC
+// microgrid is that a converter is a CONTROLLED source: it regulates current
+// and simply refuses to exceed its limit. Same feeder, a converter held to 2x
+// its rating contributes 833 A — seven times less than the ideal-source figure,
+// and it has nothing to do with impedance.
+//
+// So the model here is NOT "add impedances everywhere". Each source is limited
+// by whatever actually limits IT:
+//
+//   battery   impedance-limited   V_oc / (R_internal + R_cable)
+//   PV        physics-limited     I_sc, which a PV cell cannot exceed
+//   FSP       control-limited     converter current limit x rated current
+//
+// Deliberately NOT modelled: busbar impedance. A short, heavy busbar is
+// sub-milliohm against 20 m ohm of feeder, so it would move the answer by well
+// under 1 % while adding a whole model layer. Declared instead of modelled.
+// Converters current-limit into a fault rather than delivering whatever their
+// impedance allows. Typical spacecraft and terrestrial DC-DC practice holds the
+// limit near 1.5-2x rated so the silicon survives long enough to trip; 2.0 is
+// the pessimistic end, which is the right end for sizing protection.
+export const CONVERTER_FAULT_CURRENT_MULTIPLE = 2.0;
+
+// A photovoltaic array is a current source once it is off its knee: short it
+// and you get the short-circuit current, not an unbounded one. For triple-
+// junction space cells Isc runs only a little above the maximum-power current,
+// and 1.15 is a standard engineering figure for Isc/Impp.
+//
+// This is the strongest limit on the diagram. It is also the reason a PV array
+// cannot, by itself, trip a protection device sized on its own rating — a fact
+// worth stating in the results rather than leaving implicit.
+export const PV_SHORT_CIRCUIT_RATIO = 1.15;
+
+// A fault sees OPEN-CIRCUIT voltage, not the loaded terminal voltage: the load
+// is gone. So the battery's fault contribution is driven by OCV(soc), which is
+// already defined by OCV_POLY_NMC below and must NOT be restated as a literal
+// here — 4.20 V/cell at full charge is what that curve gives, and a hand-copied
+// 3.9 would have understated the fault by 8 %.
+//
+// protection.py therefore evaluates the curve rather than reading a constant.
+// There is no circular import to avoid: the polynomial lives in config, and
+// evaluating it is six lines of Horner.
 // --- Battery terminals and instruments (B01) ---------------------------------
 // Everything above describes what the battery STORES. This section describes
 // what it EXPOSES — a voltage a meter could read — so that state of charge
