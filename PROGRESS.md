@@ -188,3 +188,22 @@ consistently preferred measurements.
 
 Each step should be its own git commit, so the repo history itself tells
 the build story — useful when this becomes a portfolio piece.
+- [x] **T05** What actually limits a fault — DONE 2026-09-15 (Claude, at the
+      user's request; the spec was written for the user but handed back).
+      `prospective_fault_current_a` treated the source as ideal, I = V/R_cable,
+      and its own @note already called that an upper bound. The bound was
+      loose: on the battery feeder it overstates by nearly 5x.
+      Three limits replace it, and only ONE is an impedance —
+      battery `OCV(soc)/(R_internal + R_cable)`, PV `Isc` which a cell cannot
+      exceed, converter `limit x rated`. The battery's 14.3 mohm is 0.7x the
+      cable's own so impedance is a real correction, but CONTROL is the larger
+      one: adding impedance to converter-fed sources while ignoring their
+      current limits would be more detail and less truth.
+      **The finding: a PV array cannot trip its own protection.** Isc is 1.15x
+      rated against a 10x instantaneous threshold, so it simply feeds the
+      fault indefinitely. That is a real property of PV systems and the reason
+      they need a different protection philosophy from a battery.
+      Fault-to-rating ratios fall across the board — the battery feeder from
+      88x ideal to 21.5x with every source summed. Busbar impedance is
+      declared rather than modelled: under 1 % of the answer for a whole model
+      layer. 12 new tests, 312 passing.

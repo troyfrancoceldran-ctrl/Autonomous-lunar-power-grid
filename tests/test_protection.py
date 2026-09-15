@@ -33,7 +33,10 @@ from topology import Feeder, build_topology
 import protection
 from protection import (ProtectionDevice, build_protection,
                         feeder_rated_current_a, prospective_fault_current_a,
-                        is_selective)
+                        is_selective, source_fault_contribution_a,
+                        is_pv_able_to_trip, total_fault_current_a)
+from config import (BATTERY_R_INTERNAL_OHM, CONVERTER_FAULT_CURRENT_MULTIPLE,
+                    PV_SHORT_CIRCUIT_RATIO)
 
 
 def needs(call):
@@ -251,3 +254,102 @@ def test_coordination_failures_reports_rather_than_raises():
     problems = protection.coordination_failures(upstream, devices, currents)
     assert isinstance(problems, list)
     assert all(isinstance(p, str) for p in problems)
+
+
+# --- T05: what actually limits a fault ---------------------------------------
+
+def _battery_feeder():
+    return next(f for bus in build_topology(sized=True) for f in bus.feeders
+                if "Battery" in f.name)
+
+
+def test_battery_contribution_is_below_the_ideal_source():
+    """Including the pack's impedance must REDUCE the fault, never raise it."""
+    f = _battery_feeder()
+    ideal = prospective_fault_current_a(f, CABLE_TEMP_DAY_K)
+    real = source_fault_contribution_a("battery", f, CABLE_TEMP_DAY_K)
+    assert real < ideal
+
+
+def test_battery_uses_both_resistances_in_series():
+    """The trap: dropping either resistance is wrong by tens of percent."""
+    f = _battery_feeder()
+    got = source_fault_contribution_a("battery", f, CABLE_TEMP_DAY_K)
+    cable = f.resistance_ohm(CABLE_TEMP_DAY_K)
+    # Cable alone, and pack alone, must BOTH differ from the answer — each by
+    # more than a rounding term, since the two are within a factor of two.
+    assert got == pytest.approx(
+        protection._pack_ocv_v(1.0) / (BATTERY_R_INTERNAL_OHM + cable))
+    assert got < protection._pack_ocv_v(1.0) / cable
+    assert got < protection._pack_ocv_v(1.0) / BATTERY_R_INTERNAL_OHM
+
+
+def test_battery_contribution_falls_as_the_pack_empties():
+    """OCV is monotonic, so a flatter pack must drive less fault current."""
+    f = _battery_feeder()
+    full = source_fault_contribution_a("battery", f, CABLE_TEMP_DAY_K, soc=1.0)
+    low = source_fault_contribution_a("battery", f, CABLE_TEMP_DAY_K, soc=0.2)
+    assert low < full
+
+
+def test_battery_contribution_falls_as_the_cable_warms():
+    """Hot conductors mean more resistance, so less prospective fault."""
+    f = _battery_feeder()
+    cold = source_fault_contribution_a("battery", f, CABLE_TEMP_NIGHT_K)
+    hot = source_fault_contribution_a("battery", f, CABLE_TEMP_DAY_K)
+    assert hot < cold
+
+
+@pytest.mark.parametrize("kind,multiple", [
+    ("pv", PV_SHORT_CIRCUIT_RATIO),
+    ("converter", CONVERTER_FAULT_CURRENT_MULTIPLE)])
+def test_limited_sources_are_a_multiple_of_rating(kind, multiple):
+    """Neither is set by impedance, so each is exactly a multiple of rated."""
+    f = _battery_feeder()
+    expected = multiple * feeder_rated_current_a(f)
+    assert source_fault_contribution_a(kind, f, CABLE_TEMP_DAY_K) \
+        == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("kind", ["pv", "converter"])
+def test_limited_sources_ignore_cable_temperature(kind):
+    """THE trap. A current-limited source does not care about the cable.
+
+    If a temperature change moves these, the implementation has divided by a
+    resistance it should never have consulted.
+    """
+    f = _battery_feeder()
+    cold = source_fault_contribution_a(kind, f, CABLE_TEMP_NIGHT_K)
+    hot = source_fault_contribution_a(kind, f, CABLE_TEMP_DAY_K)
+    assert cold == pytest.approx(hot)
+
+
+def test_unknown_source_kind_raises():
+    """Returning 0.0 for a typo is how protection gets under-sized."""
+    with pytest.raises(ValueError):
+        source_fault_contribution_a("turbine", _battery_feeder(),
+                                    CABLE_TEMP_DAY_K)
+
+
+def test_pv_alone_cannot_trip_its_own_protection():
+    """The finding: Isc is 1.15x rated against a 10x threshold."""
+    f = _battery_feeder()
+    assert is_pv_able_to_trip(f, CABLE_TEMP_DAY_K) is False
+    assert PV_SHORT_CIRCUIT_RATIO < SSPC_INSTANTANEOUS_TRIP_MULTIPLE
+
+
+def test_total_exceeds_every_single_contribution():
+    """A fault is fed by everything energised, not by the nearest source."""
+    f = _battery_feeder()
+    total = total_fault_current_a(f, CABLE_TEMP_DAY_K)
+    for kind in ("battery", "pv", "converter"):
+        assert total > source_fault_contribution_a(kind, f, CABLE_TEMP_DAY_K)
+
+
+def test_pack_ocv_matches_the_battery_asset():
+    """protection re-implements Horner; it must not drift from the asset."""
+    from assets.storage import BatteryBank
+    battery = BatteryBank()
+    for soc in (0.05, 0.5, 1.0):
+        assert protection._pack_ocv_v(soc) == pytest.approx(
+            battery.open_circuit_voltage_v(soc))
