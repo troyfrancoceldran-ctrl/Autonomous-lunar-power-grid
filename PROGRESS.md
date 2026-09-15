@@ -1,5 +1,22 @@
 # Build Progress
 
+> **COMPLETE — 2026-09-15.** Every step ticked: Steps 0-12, the electrical
+> topology T01-T05, and Project B end to end (B00-B04.5). The two projects are
+> merged and the question they were built to ask has an answer.
+>
+> | suite | result |
+> |---|---|
+> | Python | 312 passed |
+> | C++ estimator | 14 passed, 0 skipped |
+> | C++ controller vs Python | 1440/1440 ticks identical |
+> | Browser vs Python | 198,720 comparisons + 1992 EKF checks, PASS |
+> | Hardware in the loop | 1440/1440 ticks identical on an ESP32 |
+>
+> Further work is recorded as **recommendations** in `README.md`, not as
+> unfinished tasks: an estimator for the fuel cell, the filter on the ESP32
+> with the `float`-versus-`double` question measured, and thermal coupling.
+
+
 Working agreement: hybrid pace. Boilerplate/plumbing steps are written by
 Claude; physics- and algorithm-heavy steps (environment model, generation,
 storage/SoC math, RFC mass balance, the controller) are written by the user
@@ -101,9 +118,10 @@ number we can state.
       8167 files evicted to the cloud. `import matplotlib` cost 229.9 s cold
       against 0.22 s warm. Rebuilt at ~/.venvs/lunar with .venv as a symlink;
       the full suite went from 704.96 s to 2.47 s.
-- [~] **B01 (superseded line)** A battery terminal model the EKF can observe — OCV curve plus
-      internal resistance, so there is a voltage to measure rather than a
-      state to read. (USER — physics)
+- [x] **B01 (superseded line — see the entry above for the result)** A battery
+      terminal model the EKF can observe: OCV curve plus internal resistance,
+      so there is a voltage to measure rather than a state to read.
+      (USER — physics)
 - [x] **B02** `estimator/src/ekf.cpp` — DONE 2026-09-15. Algorithm by the
       user; spec, generated params, plumbing and 14 tests by Claude.
       **14 passed, 0 failed, 0 skipped.** Two functions:
@@ -184,9 +202,9 @@ number we can state.
       themes. In the browser run the EKF stays within 1.29 % while pure
       coulomb counting reaches 62.45 % — a 48x difference, which is the
       finding stated as a picture.
-- [ ] **B03** was numbered before B04 but sequenced after it: it needs an
-      ESP32, PlatformIO/ESP-IDF and pyserial, none of which are installed,
-      and it produces no finding of its own. See below. (Claude — plumbing)
+      (B03 was numbered before B04 but sequenced after it, because it needed
+      hardware that was not attached and produced no finding of its own. The
+      board arrived 2026-09-15 and B03 is recorded above, complete.)
 
 NOTE ON THE "HARDWARE RENDER". It was a placeholder and the user was never
 sure of it either (said so 2026-09-08). Hardware-in-the-loop supersedes it: a

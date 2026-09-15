@@ -261,58 +261,159 @@ A full audit against NASA and IEEE sources — six findings, all closed — is i
 
 ---
 
-## Roadmap
+## Two projects, merged
 
-The simplifications above are not a permanent boundary — they are the order of
-work. Each item below exists because the one after it cannot be honest without
-it.
+This repository is **two projects in one**, and the merge is the point rather
+than a convenience.
 
-### Next: electrical topology
+**Project A — the microgrid.** An hour-by-hour simulation of the outpost's
+power system: generation, storage, loads, dispatch, a controller that sheds and
+restores, and the electrical reality underneath it — conductors with resistance,
+converters with ratings, protection that has to coordinate.
 
-Give the model a bus voltage and per-feeder currents, converter ratings
-distinct from device efficiencies, and enough of a protection scheme to say
-what each breaker is actually rated for.
+**Project B — the estimator.** An Extended Kalman Filter in C++ that infers
+battery state of charge from terminal measurements.
 
-This is the step that turns a power balance into something buildable. It is
-also what would make a single-line diagram *real* rather than illustrative — an
-SLD is properly a statement about voltage levels and protection, not just about
-what connects to what. Every downstream ambition needs it first.
+They were planned as separate pieces of work. Merging them turned out to expose
+something neither would have shown alone.
 
-### Next: the model running client-side
+### Why they had to merge
 
-Port the simulation core to JavaScript so it runs in a browser rather than
-replaying an exported history.
+`BatteryBank.state_of_charge` is `energy_wh / capacity_wh`. Exact. Noiseless.
+Known instantly, every tick, for free.
 
-Most of the work is already done by accident of an earlier constraint: the
-controller is plain arithmetic with no numpy, written that way so it would port
-to a microcontroller. The same discipline makes it port to JS almost line for
-line, and the environment, storage and load models are equally small. It is a
-translation, not a rewrite.
+**No real battery can tell you that.** There is no state-of-charge sensor. You
+measure terminal voltage and current, and from those you *infer* the charge —
+which is precisely why Kalman filters exist in battery management.
 
-### Then: an operable single-line diagram
+So Project A's controller had been acting on ground truth it could never have
+had. That is a cheat, and it is the interesting kind: it does not make the model
+wrong so much as make it **optimistic in a way nobody measured**. Project B
+exists to measure it, and the merge turns two exercises into one question:
 
-Not a replay — a diagram you can *operate*. Change the array size, move the
-outage, open a breaker by hand, and watch the grid respond, because the model
-is running underneath rather than being played back.
+> **How much does outpost reliability degrade when the controller acts on an
+> estimate rather than on truth?**
 
-### Eventually: a hardware render
+### How Project B is built
 
-A physical representation of the outpost that reflects the specified system
-rather than an artist's impression. This needs the topology work above: you
-cannot render hardware you have not specified.
+Five steps, each of which had to work before the next was honest.
 
-### Open regardless
+| | what | where |
+|---|---|---|
+| **B01** | give the battery terminals — an OCV curve and internal resistance, so `V = OCV(soc) − I·R` | `assets/storage.py` |
+| **B02** | the filter itself — the measurement Jacobian and the six scalar equations | `estimator/src/ekf.cpp` |
+| **B03** | the HIL bridge — controller on an ESP32, physics on the host | `firmware/` |
+| **B04** | the measurement — truth versus estimate, across the scenarios | `soc_estimator.py` |
+| **B04.5** | the estimator made visible, live in the browser | `web/src/ekf.js` |
 
-- **The controller has never run on a microcontroller.** It was written to
-  port — single decision function, plain arithmetic, no dependencies — but the
-  target board is unchosen and the claim is untested. An ESP32-class part is
-  assumed plausible, not confirmed.
-- **Curtailment is 27 % and unaddressed.** The obvious lever is a larger
-  electrolyser; whether the mass penalty is worth it is a real trade study
-  nobody has run.
-- **The restore fit test looks only at present demand**, so a duty-cycled load
-  can be restored during its idle window. Publishing a nameplate maximum on the
-  `Load` interface would close it without resorting to forecasting.
+**The single equation that makes it both possible and hard** is B01's. The
+`I·R` term means a heavy discharge *looks like* a low state of charge, and
+untangling the two is the filter's entire job.
+
+**One state, so no matrices.** The filter tracks charge and nothing else, which
+makes all six equations scalar arithmetic that can be printed and watched. The
+Kalman gain is the only interesting quantity in it:
+
+```
+K = P·H / (H²·P + R)
+```
+
+`H` is the OCV curve's slope. A flat curve drives `H` to zero, which drives `K`
+to zero, and the filter stops listening to the voltmeter however good the
+instrument is. That is chemistry, not tuning — and it is why LFP estimators are
+known to diverge where NMC ones do not. The full mathematics is typeset in
+`docs/ekf_formulas.pdf`.
+
+### How the two halves stay honest about each other
+
+The filter is C++; the simulation is Python; the browser runs JavaScript. Three
+languages holding one model is three chances to drift, so none of the copies is
+trusted for being written carefully:
+
+- `estimator/include/battery_params.hpp` is **generated** from `config.py`, so
+  the filter and the simulation cannot disagree about the battery. Its
+  *derivative* deliberately is not generated — that is the estimator's job.
+- `soc_estimator.py` calls the **real compiled C++** through `ctypes`. B04
+  measures the actual filter, not a Python lookalike that would need keeping in
+  step by hand.
+- `web/src/ekf.js` is held to a golden trace from that same C++: 1992 checks
+  over the OCV curve, its derivative and 600 filter ticks, agreeing to
+  **3.87e-15** — machine epsilon.
+- `firmware/src/controller.cpp` is held to a 1440-tick golden trace of the
+  Python controller's decisions, captured by wrapping `controller.update` inside
+  the running simulation rather than reconstructing its inputs.
+
+### What the merge actually found
+
+**The outpost does not notice.** Unserved energy, minimum reserve and controller
+actions are identical whether the controller reads truth or the estimate — at
+every sensor bias from 2 A to 100 A, even where the battery estimate is 60.7 %
+wrong.
+
+Six identical rows is also what a broken experiment looks like, so the wiring
+was checked rather than assumed: instrumenting `controller.update` directly
+shows it genuinely receives a fleet figure up to **5.08 points** from truth. The
+estimate arrives. The controller does not care.
+
+**Why, in two numbers.** The battery holds **7.95 %** of the fleet reserve, so a
+60 % battery error becomes ~4.4 points of fleet error — and the controller's
+hysteresis is **15 points** wide. Nothing flips.
+
+That is the opposite of what was predicted, and the reason is architectural
+rather than numerical: **reliability here is protected by the fuel cell's
+dominance of stored energy, not by the quality of the estimate.** It is reported
+as a **lower bound**, because only the battery is estimated; the RFC has no OCV
+curve or terminals in this model.
+
+What the estimator *does* deliver is visible on the live page: across one
+synodic month it stays within **1.29 %** while pure coulomb counting on the same
+readings reaches **62.45 %**. Unbounded drift becomes bounded error. That is the
+finding, and it holds whether or not the controller is listening.
+
+---
+
+## Recommended next work
+
+The project is complete as it stands. These are the three things I would do
+next, in the order they would pay off — recorded as recommendations rather than
+promises.
+
+### 1. Give the fuel cell an estimator
+
+This is the one that would change a headline. B04's result — that the outpost is
+insensitive to estimation error — is a **lower bound** created by a modelling
+gap, not a property of outposts. The RFC holds 92 % of the reserve and is read
+as ground truth, so most of what the controller sees is exact by construction.
+
+Estimating the RFC too, or measuring a battery-dominant outpost, would turn
+"the outpost does not notice" into a number that means something.
+
+### 2. Put the estimator on the ESP32, and measure what `float` costs
+
+B03 moved the *controller* to hardware. The filter stayed on the host.
+
+Porting it is the easy half: `estimator/src/ekf.cpp` is 47 lines with no
+framework header and no allocation, so it compiles for the board essentially
+unchanged, the serial protocol needs one more command, and `web/golden/ekf.json`
+already holds a 600-tick reference trace to check it against.
+
+**The interesting half is precision.** The ESP32-D0WD-V3's LX6 core has a
+single-precision FPU, so `double` is emulated in software. Moving to `float`
+would be much faster — but the variance `P` starts at 1e-6, grows by 1e-9 a
+step, and is multiplied by `(1 − K·H)` on every correction. Single precision has
+about seven decimal digits. **Whether that is enough is genuinely unknown**, and
+the golden trace makes it measurable rather than arguable: run the same 600 ticks
+in `float`, diff against the `double` reference, and the divergence is the
+answer. "Single precision costs X % of estimate accuracy" is a real result
+either way.
+
+### 3. Thermal coupling
+
+Internal resistance is strongly temperature dependent and the lunar swing is
+severe — this model already shows a **6.28×** resistance change in the
+conductors between day and night, and declares the battery's resistance constant.
+Coupling the two would make the estimator's job harder in a way that is
+physically honest, and the OCV curve would need a temperature term to match.
 
 ---
 
@@ -426,62 +527,6 @@ double. See `web/README.md` for why that residue exists and why it stays.
 ```bash
 .venv/bin/python web/tools/run_conformance.py
 ```
-
----
-
-## The model also runs in a browser
-
-`web/` is a JavaScript port of the simulation core, so a page can change
-something and watch the outpost respond rather than replaying an exported file.
-It exists because an operable single-line diagram needs the model client-side.
-
-It was cheap because the core is **906 lines** and imports nothing outside the
-Python standard library — a consequence of writing the controller as plain
-arithmetic in Step 7 so it could one day run on a microcontroller.
-
-The port is not trusted because it reads correctly. It is trusted because it
-reproduces the Python model tick for tick:
-
-```
-  scenario     ticks  fields     checks   worst rel   result
-  bare         1440      46      66240    4.63e-10   PASS
-  topology     1440      46      66240    4.93e-10   PASS
-  full         1440      46      66240    4.91e-10   PASS
-```
-
-**198,720 comparisons.** And that 5e-10 is the golden file's 10-digit storage
-format, not the model: re-exported at full precision the `bare` scenario is
-**bit-identical**, and the other two agree to 1.85e-16 — under one ULP of a
-double. See `web/README.md` for why that residue exists and why it stays.
-
-```bash
-.venv/bin/python web/tools/run_conformance.py
-```
-
-### The one-line diagram
-
-`web/sld.html` is an operable single-line diagram: a 120 VDC busbar with the
-reactor a kilometre out behind a 1000 V link, drawn **from `buildTopology()`**
-rather than by hand, so the feeder lengths and voltages on screen are the ones
-the model used. Scrub the clock, trigger the reactor outage, switch the
-conductors and converters on and off, or resize the PV array — the simulation
-re-runs in the page and the diagram answers.
-
-It is self-contained: open it straight from disk, no server needed. The model
-inside it is injected by `web/tools/build_sld.py` from the same bundle the
-conformance runner executes, so the diagram cannot drift from the verified
-core.
-
-```bash
-.venv/bin/python web/tools/build_sld.py     # rebuild after changing the model
-open web/sld.html
-```
-
-The page also renders the four figures live and animates them against the
-clock — a time cursor tracks the diagram, and every chart redraws when the
-scenario changes. Unlike the committed PNGs, which show one fixed run, these
-follow whatever outpost you have configured. It carries its own write-up too,
-so the page stands alone without this README.
 
 ---
 
