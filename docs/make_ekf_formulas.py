@@ -222,13 +222,122 @@ def page_one():
                    va="top")
         s.y -= 0.048
 
-    s.footer(1, 3, "B02 filter")
+    s.footer(1, 4, "B02 filter")
+    return s.fig
+
+
+def page_symbols():
+    s = Sheet()
+    s.title("2.  The symbols, in code",
+            "Every quantity in the six lines, and what it is called in "
+            "src/ekf.cpp.")
+
+    s.note("Members already exist — ASSIGN them. Writing `double soc_ = ...` "
+           "declares a new", indent=0.0)
+    s.note("local that shadows the member, and the filter silently never "
+           "learns.", indent=0.0)
+    s.space(0.010)
+
+    col_a, col_b = LEFT + 0.015, LEFT + 0.42
+    top = s.y
+
+    def block(x, y, title, rows):
+        s.fig.text(x, y, title, fontsize=8, color=ACCENT, weight="bold",
+                   va="top")
+        y -= 0.021
+        for sym, name in rows:
+            s.fig.text(x, y, sym, fontsize=10.5, color=INK, va="top")
+            s.fig.text(x + 0.075, y - 0.002, name, fontsize=8.5, color=INK_SOFT,
+                       va="top", family="monospace")
+            y -= 0.019
+        return y - 0.008
+
+    y = block(col_a, top, "MEMBERS — assign, never re-declare", [
+        (r"$z$", "soc_"),
+        (r"$P$", "variance_"),
+        (r"$K$", "gain_"),
+        (r"$Q_{proc}$", "q_proc_"),
+        (r"$R_{meas}$", "r_meas_"),
+    ])
+    block(col_a, y, "PARAMETERS", [
+        (r"$I$", "current_a"),
+        (r"$V_{meas}$", "terminal_voltage_v"),
+        (r"$\Delta t$", "dt_s"),
+    ])
+
+    y = block(col_b, top, "CONSTANTS — from params::", [
+        (r"$\eta$", "COULOMBIC_EFFICIENCY"),
+        (r"$Q$", "CAPACITY_AH"),
+        (r"$R$", "R_INTERNAL_OHM"),
+        (r"$z_{min}$", "SOC_MIN / SOC_MAX"),
+    ])
+    block(col_b, y, "LOCALS — yours to create", [
+        (r"$H$", "h_v_per_soc"),
+        (r"$\hat V$", "predicted_voltage_v"),
+        (r"$y$", "residual_v"),
+    ])
+
+    s.y = top - 0.215
+    s.body("TWO different R's, and the equations write both the same way: "
+           "r_meas_ is a", colour=CRITICAL)
+    s.body("variance in volts-squared, R_INTERNAL_OHM is a resistance in ohms. "
+           "Swap them", colour=CRITICAL)
+    s.body("and the filter still runs.", colour=CRITICAL)
+
+    s.space(0.012)
+    s.rule()
+    s.heading("The shape, with the names in place")
+    s.note("Straight-line code. No loops (one state means no matrices), no "
+           "if-else", indent=0.0)
+    s.note("(std::clamp absorbs it), no guard (the denominator cannot reach "
+           "zero).", indent=0.0)
+    s.space(0.008)
+
+    code = [
+        ("double Ekf::update(double current_a,", INK),
+        ("                   double terminal_voltage_v, double dt_s) {", INK),
+        ("    // predict", ACCENT),
+        ("    soc_      = ...;", INK_SOFT),
+        ("    variance_ = ...;", INK_SOFT),
+        ("", INK),
+        ("    // correct", ACCENT),
+        ("    const double h_v_per_soc         = docv_dsoc(soc_);", INK_SOFT),
+        ("    const double predicted_voltage_v = ...;", INK_SOFT),
+        ("    const double residual_v", INK_SOFT),
+        ("            = terminal_voltage_v - predicted_voltage_v;", INK_SOFT),
+        ("", INK),
+        ("    gain_     = ...;", INK_SOFT),
+        ("    soc_      = ...;", INK_SOFT),
+        ("    variance_ = ...;", INK_SOFT),
+        ("", INK),
+        ("    soc_ = std::clamp(soc_, params::SOC_MIN, params::SOC_MAX);", INK_SOFT),
+        ("    return soc_;", INK_SOFT),
+        ("}", INK),
+    ]
+    for line, colour in code:
+        if line:
+            s.fig.text(LEFT + 0.025, s.y, line, fontsize=8, color=colour,
+                       va="top", family="monospace")
+        s.y -= 0.0150
+
+    s.space(0.010)
+    s.body("ORDER IS MEANING. H must be taken AFTER the predict step — it is "
+           "the slope", colour=CRITICAL)
+    s.body("at the PREDICTED state. Hoist it above and you have linearised "
+           "about the", colour=CRITICAL)
+    s.body("old estimate: a different, worse filter. No compiler catches "
+           "this.", colour=CRITICAL)
+    s.space(0.004)
+    s.note("Never clamp the variance — squeezing a confidence lies to the "
+           "filter.", indent=0.0)
+
+    s.footer(2, 4, "B02 filter")
     return s.fig
 
 
 def page_two():
     s = Sheet()
-    s.title("2.  The gain, and what 'extended' means",
+    s.title("3.  The gain, and what 'extended' means",
             "K is the only interesting quantity. Everything else serves it.")
 
     s.math(r"K = \frac{P H}{H^{2} P + R_{meas}}", size=15)
@@ -266,18 +375,20 @@ def page_two():
            "Kalman filter,")
     s.body("and the reason the slope has been the thread through all of this.")
 
-    s.footer(2, 3, "B02 filter")
+    s.footer(3, 4, "B02 filter")
     return s.fig
 
 
 def page_three():
     s = Sheet()
-    s.title("3.  What to expect",
+    s.title("4.  What to expect",
             "Recorded in advance, so the result is not mistaken for a failure.")
 
-    s.note("A positive current bias over-reports the discharge, so the estimate "
-           "falls FASTER")
-    s.note("than the truth and the error is negative throughout.")
+    s.note("A positive bias over-reports the discharge, so COULOMB COUNTING "
+           "runs below")
+    s.note("the truth. The FILTERED error settles slightly POSITIVE: the same "
+           "bias enters")
+    s.note("V_pred through the IR term and pulls the other way.")
     s.space(0.008)
     s.body("The bias is NOT in the state vector. This filter has one state, "
            "the charge,")
@@ -288,7 +399,11 @@ def page_three():
            "each")
     s.body("step exactly cancels the drift the biased current injected. The "
            "error stops")
-    s.body("growing and stays put.")
+    s.body("growing and stays put, at")
+    s.math(r"e_\infty \;\approx\; \frac{b_I R}{H} \;-\; "
+           r"\frac{\eta\,b_I\,\Delta t}{3600\,Q\,K H}", size=13)
+    s.note("+0.00149 (IR) - 0.00022 (drift) = +0.127 % predicted, "
+           "+0.129 % measured below.")
 
     s.space(0.008)
     ts, raw = simulate(CURRENT_SENSOR_BIAS_A, filtered=False)
@@ -326,26 +441,24 @@ def page_three():
            "the filter")
     s.body(r"the bias to estimate — a second state, $[\,z,\;b_I\,]$, which "
            "makes it a 2x2")
-    s.body("problem and lets the filter drive the residual toward zero. Serious "
-           "battery")
-    s.body(r"management does the same thing with $R$, for the same reason.")
-    s.space(0.004)
-    s.body("Do not do it first. But recognise the symptom when you see it.",
-           colour=INK_SOFT)
+    s.body("problem and drives the residual toward zero. Serious battery "
+           "management")
+    s.body(r"does the same with $R$. Not first — but recognise the symptom.")
 
     s.space(0.010)
     s.rule()
-    s.note("Sources: Plett, G. L. (2004), 'Extended Kalman filtering for battery")
-    s.note("management systems of LiPB-based HEV battery packs', Parts 1-3,")
-    s.note("J. Power Sources 134(2):262-276. Every number here is computed from")
-    s.note("this project's own config.py. Regenerate with docs/make_ekf_formulas.py.")
+    s.note("Sources: Plett, G. L. (2004), 'Extended Kalman filtering for battery "
+           "management systems")
+    s.note("of LiPB-based HEV battery packs', Parts 1-3, J. Power Sources "
+           "134(2):262-276. Every number")
+    s.note("is computed from config.py. Regenerate with docs/make_ekf_formulas.py.")
 
-    s.footer(3, 3, "B02 filter")
+    s.footer(4, 4, "B02 filter")
     return s.fig
 
 
 def main():
-    pages = [page_one(), page_two(), page_three()]
+    pages = [page_one(), page_symbols(), page_two(), page_three()]
     path = os.path.join(HERE, "ekf_formulas.pdf")
     with PdfPages(path) as pdf:
         for fig in pages:
