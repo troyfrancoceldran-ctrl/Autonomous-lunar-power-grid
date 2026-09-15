@@ -104,16 +104,27 @@ number we can state.
 - [~] **B01 (superseded line)** A battery terminal model the EKF can observe — OCV curve plus
       internal resistance, so there is a voltage to measure rather than a
       state to read. (USER — physics)
-- [~] **B02** `estimator/` — spec, generated params, plumbing and 14 tests by
-      Claude 2026-09-14; the ALGORITHM IS THE USER'S. 5 pass, 9 skip across
-      two functions: `docv_dsoc` (the Jacobian, with the chain-rule trap) and
-      `Ekf::update` (the six scalar lines). ONE STATE, so no matrices.
-      `battery_params.hpp` is generated from config.py so the filter and the
-      simulation cannot disagree about the battery.
-      Expected result, recorded in advance so it is not mistaken for failure:
-      the bias is not in the state vector, so the filter cannot remove it and
-      should settle at a bounded offset. Converting UNBOUNDED drift into
-      BOUNDED error IS the finding.
+- [x] **B02** `estimator/src/ekf.cpp` — DONE 2026-09-15. Algorithm by the
+      user; spec, generated params, plumbing and 14 tests by Claude.
+      **14 passed, 0 failed, 0 skipped.** Two functions:
+      `docv_dsoc` (the measurement Jacobian) and `Ekf::update` (the six
+      scalar lines). ONE STATE, so no matrices and no loops in the filter.
+      `docv_dsoc` verified against a central finite difference at five points
+      across the usable range, agreeing to every digit checked — the chain
+      rule's factor of 2, the pack scale and the index weighting all correct
+      at once. `battery_params.hpp` is generated from config.py so the filter
+      and the simulation cannot disagree about the battery; its derivative is
+      deliberately NOT generated.
+      The predicted result held: the bias is not in the state vector, so the
+      filter cannot remove it, and the error settles at a bounded offset
+      instead of growing. Closed form checked against simulation —
+      +0.127 % predicted, +0.129 % observed, against -42 % and still falling
+      for coulomb counting alone. Converting UNBOUNDED drift into BOUNDED
+      error IS the finding.
+      Written in C++ as a first encounter with the language: the mathematics
+      was right on the first attempt at each function, and every correction
+      after that was syntax. `estimator/CPP_NOTES.md` records the subset and
+      the traps.
 - [ ] **B03** The HIL bridge: controller on the ESP32, physics on the host,
       serial between them. This is what "hardware" should mean here — the
       controller was written numpy-free at Step 7 precisely so it could port

@@ -77,10 +77,10 @@ untangling the two is the filter's whole job.
 Lives in the main simulation (`assets/storage.py`), not here — it is battery
 physics, not estimator code.
 
-### B02 — the EKF  ·  *user, algorithm*  ·  **ready to write**
+### B02 — the EKF  ·  *user, algorithm*  ·  **DONE 2026-09-15**
 
-`include/ekf.hpp` carries the interface, the six equations and four traps.
-`src/ekf.cpp` is where they go. Two functions:
+**14 passed, 0 failed, 0 skipped.** `include/ekf.hpp` carries the interface,
+the six equations and four traps; `src/ekf.cpp` is the filter. Two functions:
 
   * `docv_dsoc(soc)` — the measurement Jacobian, the analytic derivative of
     `params::ocv_v`. The trap is the **chain rule**: the polynomial is in
