@@ -263,13 +263,19 @@ class PowerBus:
     """One tick of outpost operation, and the accounting that proves it balanced."""
 
     def __init__(self, sources, storage, loads, controller, environment,
-                buses=None, converters=None):
+                buses=None, converters=None, estimator=None):
         """Hold references to every asset; order of `storage` is merit order.
 
         @param buses  Optional iterable of topology.DCBus. Omit it and every
             feeder loss is zero, which is the model as it stood before T02 —
             so the pre-topology results remain reproducible rather than being
             overwritten by a change of physics.
+        @param estimator  Optional soc_estimator.FleetEstimator. Omit it and
+            the controller reads ground truth, exactly as it always has — so
+            every result before B04 stays reproducible, and the comparison is
+            a controlled experiment rather than a rewrite. Supply one and the
+            controller acts on an INFERENCE instead, which is the only thing
+            a real outpost could do.
         """
         self.sources = list(sources)
         self.storage = list(storage)
@@ -279,6 +285,7 @@ class PowerBus:
         self.buses = list(buses) if buses else []
         self._feeders = {f.name: f for bus in self.buses for f in bus.feeders}
         self.converters = dict(converters) if converters else {}
+        self.estimator = estimator
 
     def _supply_to_bus(self, name: str, asset_power_w: float,
                     temperature_k: float):
@@ -299,7 +306,7 @@ class PowerBus:
         return after_converter_w - feeder_loss_w, converter_loss_w, feeder_loss_w
 
     def _draw_from_bus(self, name: str, asset_power_w: float,
-                       temperature_k: float):
+                    temperature_k: float):
         """Asset needs asset_power_w; what the bus must send, and the losses.
 
         @return (bus_power_w, converter_loss_w, feeder_loss_w)
@@ -326,6 +333,18 @@ class PowerBus:
         if feeder is None or power_w <= 0.0:
             return 0.0
         return feeder.loss_w(power_w, feeder.nominal_voltage_v, temperature_k)
+
+    def _estimated_soc(self, dt_hours: float) -> float:
+        """Fleet reserve as the CONTROLLER sees it: battery inferred, tanks exact.
+
+        @param dt_hours  Present for symmetry with aggregate_soc's callers; the
+            estimate itself is already current, having been updated at the end
+            of the previous tick.
+        @note Only the battery carries an estimator. The RFC has no OCV curve
+            and no terminals in this model, so its share stays ground truth —
+            which makes the degradation measured here a LOWER BOUND.
+        """
+        return self.estimator.aggregate_soc(self.storage)
 
     @property
     def aggregate_soc(self) -> float:
@@ -424,7 +443,8 @@ class PowerBus:
         #    terminals; what the bus can spend is that minus the converter and
         #    the feeder. Handing the controller terminal figures would let it
         #    promise power that never arrives.
-        soc = self.aggregate_soc
+        soc = (self._estimated_soc(dt_hours) if self.estimator
+            else self.aggregate_soc)
         ceiling_w = self.storage_power_ceiling_w(dt_hours)
 
         gen_by_source = {source.name: source.available_power(t_hours,
@@ -463,6 +483,8 @@ class PowerBus:
         net_w = generation_bus_w - demand_bus_w
 
         # 4. DISPATCH — at most one charge or discharge call per device.
+        stored_before_wh = (self.estimator.battery.energy_wh
+                            if self.estimator else 0.0)
         charged_w = discharged_w = curtailed_w = shortfall_w = 0.0
         store_conv_loss_w = store_feed_loss_w = 0.0
         flows = {device.name: 0.0 for device in self.storage}
@@ -482,6 +504,16 @@ class PowerBus:
             # conservation identity by 60.9 W. An exact bus-side number that
             # slightly overstates what the loads lost is worth more than an
             # approximate load-side one that stops the books balancing.
+
+        # 4b. OBSERVE — the instruments read AFTER the power has flowed, and
+        #     the controller acts on this estimate NEXT tick. That lag is not
+        #     a convenience: an estimate built from this tick's current would
+        #     be answering with information the controller did not have when
+        #     it decided.
+        if self.estimator is not None:
+            self.estimator.observe(stored_before_wh,
+                                self.estimator.battery.energy_wh,
+                                dt_hours)
 
         converter_loss_w = (gen_conv_loss_w + load_conv_loss_w
                             + store_conv_loss_w)
@@ -522,6 +554,15 @@ class PowerBus:
             record[f"gen:{source.name}"] = gen_by_source[source.name]
             record[f"floss:{source.name}"] = self._feeder_loss_w(
                 source.name, gen_by_source[source.name], cable_k)
+        if self.estimator is not None:
+            # Only present when an estimator is attached, so the default
+            # history stays byte-identical to what the JS port reproduces.
+            record["est:soc"] = self.estimator.soc
+            record["est:counted"] = self.estimator.counted
+            record["est:gain"] = self.estimator.filter.gain
+            record["est:variance"] = self.estimator.filter.variance
+            record["est:true_battery_soc"] = self.estimator.battery.state_of_charge
+
         for device in self.storage:
             record[f"soc:{device.name}"] = device.state_of_charge
             record[f"flow:{device.name}"] = flows[device.name]

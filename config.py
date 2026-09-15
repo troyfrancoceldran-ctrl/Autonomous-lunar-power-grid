@@ -85,6 +85,21 @@ BATTERY_SOC_MAX: float = 1.00
 BATTERY_CHARGE_EFFICIENCY: float = 0.95
 BATTERY_DISCHARGE_EFFICIENCY: float = 0.95
 
+# COULOMBIC efficiency is NOT the energy efficiency above, and conflating the
+# two is a modelling error rather than a rounding one. The 0.95 pair counts
+# WATT-HOURS: it carries the ohmic and conversion losses, most of which leave
+# as heat across the internal resistance. Coulombic efficiency counts CHARGE —
+# amp-hours in against amp-hours out — and for lithium-ion that is essentially
+# unity, commonly quoted above 99 % and above 99.9 % for a well-behaved cell,
+# because the electrons that go in come back out; what is lost is the VOLTAGE
+# they come back at, not their number.
+#
+# The estimator counts charge, the plant keeps its books in energy, and the
+# two must agree about how the state moves or B04 measures my bookkeeping
+# instead of the filter. Declared as exactly 1.0: a simplification, stated,
+# rather than a borrowed number that happens to be wrong by 5 %.
+BATTERY_COULOMBIC_EFFICIENCY: float = 1.0
+
 # Controller thresholds, as fractions of the CAPACITY-WEIGHTED FLEET reserve
 # (see power_bus.aggregate_soc), not of any one device.
 SOC_SHED_THRESHOLD: float = 0.30       # start shedding below this

@@ -61,7 +61,9 @@ constexpr double R_INTERNAL_OHM = {r_internal!r};
 /// {capacity_wh:.0f} Wh / ({cells} x {cell_nominal} V) = {capacity_ah:.1f} Ah.
 constexpr double CAPACITY_AH = {capacity_ah!r};
 
-/// Coulombic efficiency used by the predict step.
+/// Coulombic efficiency used by the predict step — amp-hours out per
+/// amp-hour in. NOT BATTERY_DISCHARGE_EFFICIENCY, which counts watt-hours
+/// and carries the ohmic losses the IR term already models. See config.py.
 constexpr double COULOMBIC_EFFICIENCY = {coulombic!r};
 
 /// Floor and ceiling. The filter's estimate is clamped to these: a state of
@@ -123,7 +125,7 @@ def main():
         capacity_wh=cfg.BATTERY_CAPACITY_WH,
         cell_nominal=cell_nominal,
         capacity_ah=capacity_ah,
-        coulombic=cfg.BATTERY_DISCHARGE_EFFICIENCY,
+        coulombic=cfg.BATTERY_COULOMBIC_EFFICIENCY,
         soc_min=cfg.BATTERY_SOC_MIN,
         soc_max=cfg.BATTERY_SOC_MAX,
         i_noise=cfg.CURRENT_SENSOR_NOISE_A,

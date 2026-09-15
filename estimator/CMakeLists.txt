@@ -22,6 +22,13 @@ add_compile_options(-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror)
 add_library(ekf STATIC src/ekf.cpp)
 target_include_directories(ekf PUBLIC include)
 
+# A shared library so Python can call the filter through ctypes (stdlib, no
+# pybind11). B04 must measure THE filter, not a second implementation of it.
+# HOST ONLY — the shim allocates; ekf.cpp is what goes on the target.
+add_library(ekf_c SHARED src/ekf.cpp src/ekf_c_api.cpp)
+target_include_directories(ekf_c PUBLIC include)
+set_target_properties(ekf_c PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 add_executable(test_ekf test/test_ekf.cpp)
 target_link_libraries(test_ekf PRIVATE ekf)
 target_include_directories(test_ekf PRIVATE test)

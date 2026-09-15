@@ -145,9 +145,51 @@ MCU; this is that decision being cashed in.
 
 Needs hardware and a toolchain, so it comes last.
 
-### B04 — the measurement  ·  *together*
+### B04 — the measurement  ·  *together*  ·  **DONE 2026-09-15**
 
-Truth versus estimate across the scenarios. The deliverable is the table.
+Truth versus estimate across the scenarios. The deliverable was a table, and
+the table says the outpost does not care.
+
+| bias [A] | battery error | unserved kWh | min agg SoC | actions |
+|---|---|---|---|---|
+| truth | — | 0.00 | 0.2955 | 9 |
+| 2 | 1.33 % | 0.00 | 0.2955 | 9 |
+| 10 | 5.96 % | 0.00 | 0.2955 | 9 |
+| 25 | 14.60 % | 0.00 | 0.2955 | 9 |
+| 50 | 30.05 % | 0.00 | 0.2955 | 9 |
+| 100 | 60.73 % | 0.00 | 0.2955 | 9 |
+
+Six identical rows is what a broken experiment looks like, so the wiring was
+checked directly rather than assumed: instrumenting `controller.update` shows
+it genuinely receives a fleet figure up to **5.08 points** from truth at a
+100 A bias. The estimate reaches the controller. The controller does not care.
+
+**Why, in two numbers.** The battery holds **7.95 %** of the fleet reserve, so
+a 60 % battery error becomes ~4.4 points of fleet error. The controller's
+hysteresis is **15 points** wide (shed 0.30, restore 0.45), and the worst
+perturbation near the threshold was 4.375 points. Nothing flips.
+
+This section predicted the opposite — that the power-limited hours would get
+worse by an amount we could state. The amount is zero, and the reason is
+architectural rather than numerical: **reliability here is protected by the
+RFC's dominance of stored energy, not by the quality of the estimate.**
+
+It is a LOWER BOUND, and deliberately reported as one. Only the battery is
+estimated; the RFC has no OCV curve and no terminals in this model, so its
+share stays ground truth. Giving the RFC an estimator, or measuring a
+battery-dominant outpost, is the next experiment.
+
+### B04.5 — the estimator, visible
+
+`web/src/ekf.js` puts the filter in the browser so the page shows it working
+tick by tick. It is held to a golden trace from the compiled C++ — 1992 checks
+across the OCV curve, its derivative and 600 ticks, agreeing to **3.87e-15**
+relative — because a port nobody checks is a second source of truth that
+drifts silently.
+
+On the page: a live estimator tile, a truth-versus-estimate chart and a
+Kalman-gain chart. Over one synodic month the EKF stays within **1.29 %**
+while pure coulomb counting on the same readings reaches **62.45 %**.
 
 ---
 

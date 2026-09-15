@@ -129,7 +129,45 @@ number we can state.
       serial between them. This is what "hardware" should mean here — the
       controller was written numpy-free at Step 7 precisely so it could port
       to an MCU. (Claude — plumbing)
-- [ ] **B04** Measure truth-vs-estimate across the scenarios. (together)
+- [x] **B04** Truth vs estimate — MEASURED 2026-09-15, and the answer is not
+      the one that was predicted. (together)
+      The controller's only view of stored energy is one float at
+      `power_bus.py:427`. B04 swaps it for an EKF inference and reports the
+      cost. `soc_estimator.py` calls the REAL C++ filter through ctypes —
+      stdlib only, no port to drift — and `estimated=` defaults to False, so
+      all 300 pre-B04 tests still pass and the comparison changes one
+      variable rather than the model.
+      **The outpost does not notice.** Unserved kWh, min aggregate SoC and
+      controller actions are identical to truth at every sensor bias from
+      2 A to 100 A, even where the battery estimate is 60.7 % wrong. That is
+      not broken wiring: instrumenting `controller.update` directly confirms
+      it receives a fleet figure up to 5.08 points from truth.
+      WHY, in two numbers. The battery is 7.95 % of the fleet reserve, so
+      even a 60 % battery error becomes ~4.4 points of fleet error; and the
+      controller's hysteresis is 15 points wide, so nothing flips. The
+      reliability is protected by the RFC's dominance of stored energy, not
+      by the quality of the estimate.
+      estimator/README.md predicted the power-limited hours would get WORSE
+      by a statable amount. The amount is zero, and the reason is
+      architectural. This is a LOWER BOUND: only the battery is estimated,
+      because the RFC has no OCV curve or terminals in this model. Giving the
+      RFC an estimator, or measuring a battery-dominant outpost, is the next
+      experiment rather than a correction to this one.
+- [x] **B04.5** The estimator, visible. 2026-09-15.
+      `web/src/ekf.js` ports the filter to the browser so the page shows it
+      WORKING tick by tick rather than replaying a chart computed elsewhere.
+      Held to a golden trace generated from the compiled C++ through ctypes:
+      1992 checks over the OCV curve, its derivative and 600 filter ticks,
+      agreeing to 3.87e-15 relative. A port nobody checks is a second source
+      of truth.
+      Adds a live signal tile, a truth-vs-estimate chart and a Kalman-gain
+      chart to the page, plus `visualization.figure_estimator` in both
+      themes. In the browser run the EKF stays within 1.29 % while pure
+      coulomb counting reaches 62.45 % — a 48x difference, which is the
+      finding stated as a picture.
+- [ ] **B03** was numbered before B04 but sequenced after it: it needs an
+      ESP32, PlatformIO/ESP-IDF and pyserial, none of which are installed,
+      and it produces no finding of its own. See below. (Claude — plumbing)
 
 NOTE ON THE "HARDWARE RENDER". It was a placeholder and the user was never
 sure of it either (said so 2026-09-08). Hardware-in-the-loop supersedes it: a

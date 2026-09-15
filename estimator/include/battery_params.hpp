@@ -25,8 +25,10 @@ constexpr double R_INTERNAL_OHM = 0.0143;
 /// 200000 Wh / (32 x 3.7 V) = 1689.2 Ah.
 constexpr double CAPACITY_AH = 1689.1891891891892;
 
-/// Coulombic efficiency used by the predict step.
-constexpr double COULOMBIC_EFFICIENCY = 0.95;
+/// Coulombic efficiency used by the predict step — amp-hours out per
+/// amp-hour in. NOT BATTERY_DISCHARGE_EFFICIENCY, which counts watt-hours
+/// and carries the ohmic losses the IR term already models. See config.py.
+constexpr double COULOMBIC_EFFICIENCY = 1.0;
 
 /// Floor and ceiling. The filter's estimate is clamped to these: a state of
 /// charge outside them is not merely unlikely, it is unphysical.

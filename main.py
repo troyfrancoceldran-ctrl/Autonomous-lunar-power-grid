@@ -80,9 +80,16 @@ from assets.storage import BatteryBank, RegenerativeFuelCell
 
 
 def build_outpost(environment, outage_start_hours=None,
-                  topology: bool = False,
-                  converters: bool = False) -> PowerBus:
-    """Assemble the standard outpost; storage order IS the merit order."""
+                topology: bool = False,
+                converters: bool = False,
+                estimated: bool = False) -> PowerBus:
+    """Assemble the standard outpost; storage order IS the merit order.
+
+    @param estimated  Hand the controller an EKF estimate of the battery's
+        charge instead of its true state. Default False, so every result
+        predating B04 reproduces exactly and the comparison changes one
+        variable rather than the model.
+    """
     bus = PowerBus(
         sources=[
             PVArray(),
@@ -103,6 +110,13 @@ def build_outpost(environment, outage_start_hours=None,
         environment=environment,
         buses=build_topology(sized=True) if topology else None,
     )
+    if estimated:
+        # Built from the battery the bus actually holds, never from a second
+        # BatteryBank() constructed here — the estimator must observe the pack
+        # being dispatched, not a copy of it. Defect D-03 was this same class
+        # of mistake in the feeder binding.
+        from soc_estimator import FleetEstimator
+        bus.estimator = FleetEstimator(bus.storage[0])
     if converters:
         # Built FROM the assembled bus, never from a list restated here, so an
         # asset added above cannot end up without power electronics. Defect
@@ -181,4 +195,4 @@ if __name__ == "__main__":
             else f"FSP outage at t={args.outage:.0f} h")
     run_scenario(label, outage_start_hours=args.outage, export=args.export,
                 report=args.report, figures=args.figures,
-                 topology=args.topology, converters=args.converters)
+                topology=args.topology, converters=args.converters)
