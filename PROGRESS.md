@@ -221,7 +221,10 @@ consistently preferred measurements.
    go-ahead at the time, not this note. Two things to settle first: the repo
    name, and the git author identity (see tasks.md — currently the repo-local
    "TroyJan_ EE").
-5. **LinkedIn post** — Claude can draft it; posting is the user's to do.
+5. **LinkedIn post** — DRAFTED 2026-09-15 at `docs/linkedin_post.md`. Two
+   variants, a first comment with the links, and what to attach. Posting is
+   the user's to do. Every figure in it was checked against the repository
+   before it was written down.
 
 Each step should be its own git commit, so the repo history itself tells
 the build story — useful when this becomes a portfolio piece.
