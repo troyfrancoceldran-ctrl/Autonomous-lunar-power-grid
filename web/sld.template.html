@@ -1,3 +1,6 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lunar Outpost One-Line</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -129,6 +132,24 @@
   .feeder.live  { stroke: var(--blue); stroke-width: 2.6; }
   .feeder.charge{ stroke: var(--green); stroke-width: 2.6; }
   .feeder.shedout { stroke: var(--faint); stroke-dasharray: 3 4; }
+
+  /* Bus tie. The only animated element on the diagram: everywhere else a
+     colour change is enough, but a tie carries power in BOTH directions and
+     a static line cannot say which way. The dashes march the way the power
+     goes — right when storage feeds the loads, left when the loads' surplus
+     charges it. */
+  .tie { stroke: var(--faint); stroke-width: 2.6; fill: none; }
+  .tie.live   { stroke: var(--blue); }
+  .tie.charge { stroke: var(--green); }
+  .tie.flow   { stroke-dasharray: 7 5; animation: tieflow 1s linear infinite; }
+  .tie.flow.rev { animation-direction: reverse; }
+  .tie.fail   { stroke: var(--red); }
+  @keyframes tieflow { to { stroke-dashoffset: -24; } }
+  @media (prefers-reduced-motion: reduce) {
+    /* The direction still reads from the arrowhead and the label, so losing
+       the motion costs nothing a reader needs. */
+    .tie.flow { animation: none; }
+  }
   .sym  { fill: var(--panel); stroke: var(--soft); stroke-width: 1.6; }
   .sym.on { stroke: var(--blue); }
   .sym.off { stroke: var(--faint); }
@@ -570,6 +591,9 @@ const LAYOUT = {
 };
 
 const BUS_Y = 250, DROP_Y = 336, SW_Y = 288, NAME_Y = 404, VAL_Y = 420;
+// The tie sits on the line that already divides storage from loads, so the
+// diagram gains a device rather than a second boundary.
+const TIE_X = 352;
 
 const $ = (id) => document.getElementById(id);
 const kW = (w) => (w / 1000).toFixed(2);
@@ -738,15 +762,32 @@ function drawStatic() {
     </marker>
   </defs>`);
 
-  // Busbar
-  p.push(`<line class="busline" x1="62" y1="${BUS_Y}" x2="938" y2="${BUS_Y}"/>`);
+  // Busbar — in TWO sections, because a bus tie that does not interrupt the
+  // bus is a decoration rather than a device. Storage sits on the left
+  // section, loads on the right, and everything between them crosses the tie.
+  p.push(`<line class="busline" x1="62" y1="${BUS_Y}" x2="${TIE_X - 26}" y2="${BUS_Y}"/>`);
+  p.push(`<line class="busline" x1="${TIE_X + 26}" y1="${BUS_Y}" x2="938" y2="${BUS_Y}"/>`);
   p.push(`<text class="eyebrow" x="62" y="${BUS_Y - 14}">USER BUS · 120 VDC · ISPSIS</text>`);
   p.push(`<text class="annot" x="938" y="${BUS_Y - 14}" text-anchor="end" id="busState">energised</text>`);
 
   // Group eyebrows
   p.push(`<text class="eyebrow" x="128" y="${VAL_Y + 40}">STORAGE</text>`);
   p.push(`<text class="eyebrow" x="452" y="${VAL_Y + 40}">LOADS</text>`);
-  p.push(`<line x1="352" y1="${BUS_Y + 26}" x2="352" y2="${VAL_Y + 30}" stroke="var(--hair)" stroke-dasharray="2 5"/>`);
+  p.push(`<line x1="${TIE_X}" y1="${BUS_Y + 26}" x2="${TIE_X}" y2="${VAL_Y + 30}" stroke="var(--hair)" stroke-dasharray="2 5"/>`);
+
+  // --- bus tie ---------------------------------------------------------------
+  // Drawn as an SSPC like every other switch on this diagram, for the same
+  // reason: DC has no natural current zero, so the contact that opens this is
+  // solid-state rather than mechanical.
+  p.push(`<line class="tie" id="tie-line" x1="${TIE_X - 26}" y1="${BUS_Y}" x2="${TIE_X + 26}" y2="${BUS_Y}"/>`);
+  p.push(`<rect class="sym" id="tie-box" x="${TIE_X - 11}" y="${BUS_Y - 11}" width="22" height="22" rx="2"/>`);
+  p.push(`<line class="glyph" id="tie-glyph" x1="${TIE_X - 6}" y1="${BUS_Y + 6}" x2="${TIE_X + 6}" y2="${BUS_Y - 6}"/>`);
+  p.push(`<path class="glyph" id="tie-arrow" d="" marker-end="url(#ar)" opacity="0"/>`);
+  // Both captions go ABOVE the bus. Below it, the dashed line that separates
+  // the storage zone from the loads runs vertically through x = TIE_X, and a
+  // centred label would be struck through by it.
+  p.push(`<text class="eyebrow" x="${TIE_X}" y="${BUS_Y - 46}" text-anchor="middle">BUS TIE</text>`);
+  p.push(`<text class="annot" id="tie-val" x="${TIE_X}" y="${BUS_Y - 32}" text-anchor="middle">—</text>`);
 
   for (const [name, cfg] of Object.entries(LAYOUT)) {
     const x = cfg.x, id = slug(name);
@@ -879,6 +920,49 @@ function render() {
   }
   document.querySelector(".busline").setAttribute("stroke",
     failing ? "var(--red)" : "var(--bus)");
+
+  // --- bus tie -------------------------------------------------------------
+  // What crosses the tie is the STORAGE zone's net exchange with the rest of
+  // the bus: discharging pushes power right toward the loads, charging pulls
+  // it left off the sources. Both cannot be non-zero in one tick — dispatch is
+  // either surplus or deficit — so one signed number describes the tie, and
+  // the run confirms it: 0 ticks of 1440 have both.
+  //
+  // The tie is always CLOSED. Nothing in this model opens one, and drawing a
+  // state the simulation cannot produce would be decoration pretending to be
+  // instrumentation. What it shows instead is direction, magnitude, and
+  // whether the bus it ties is in shortfall.
+  {
+    const disch = r.discharged_w ?? 0, chg = r.charged_w ?? 0;
+    const signed = disch - chg;                 // + toward loads, - toward storage
+    const mag = Math.abs(signed);
+    const line = $("tie-line"), box = $("tie-box");
+    const gl = $("tie-glyph"), arrow = $("tie-arrow"), val = $("tie-val");
+
+    const dir = signed >= 0 ? "" : " rev";
+    line.className.baseVal = "tie"
+      + (failing ? " fail" : "")
+      + (mag > 0 ? (signed > 0 ? " live flow" : " charge flow") + dir : "");
+    // Faster when more power crosses, floored so it never blurs and capped so
+    // a trickle still visibly moves. ~50 kW is about this bus's ceiling.
+    line.style.animationDuration = mag > 0
+      ? Math.max(0.35, Math.min(2.4, 17500 / Math.max(mag, 1))).toFixed(2) + "s"
+      : "";
+    box.className.baseVal = "sym" + (mag > 0 ? " on" : "");
+    gl.className.baseVal = "glyph" + (mag > 0 ? " on" : "");
+
+    if (mag > 0) {
+      const x0 = signed > 0 ? TIE_X + 14 : TIE_X - 14;
+      const x1 = signed > 0 ? TIE_X + 30 : TIE_X - 30;
+      arrow.setAttribute("d", `M${x0} ${BUS_Y - 17} L${x1} ${BUS_Y - 17}`);
+      arrow.setAttribute("opacity", "1");
+    } else {
+      arrow.setAttribute("opacity", "0");
+    }
+    val.textContent = mag === 0
+      ? (failing ? "tied · storage exhausted" : "tied · 0.00 kW")
+      : `${signed > 0 ? "→ loads" : "← storage"}  ${kW(mag)} kW`;
+  }
 
   for (const [name, cfg] of Object.entries(LAYOUT)) {
     const id = slug(name);
